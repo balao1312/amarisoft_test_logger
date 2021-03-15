@@ -3,3 +3,5 @@ venv
 **/.DS_store
 .vscode% 
 credential.py
+**/logs
+
