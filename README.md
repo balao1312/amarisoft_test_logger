@@ -1,6 +1,6 @@
 # Description
 
-Scrips for connection test result logging to **influxDB for **Grafana** (visualization).
+Scrips for connection test result logging to **influxDB** for **Grafana** (visualization).
 
 # Usage
 
