@@ -35,13 +35,6 @@ class Amari_logger_ping(Amari_logger):
             influx_format_list.append(data)
         return influx_format_list
 
-    def influx_format_list_to_string_list(self, influx_format_list):
-        string_list = []
-        for each in influx_format_list:
-            string_list.append(
-                f"{each['fields']['RTT']},{each['time']},{each['tags']['tos']}")
-        return string_list
-
     def run(self):
         process = subprocess.Popen(shlex.split(
             f'ping {self.ip} -Q {self.tos}'), stdout=subprocess.PIPE)
@@ -83,13 +76,12 @@ if __name__ == '__main__':
         logger.run()
     except KeyboardInterrupt:
         print('\n\nInterrupted')
-        if logger.sending:
-            count = 9
-            while logger.sending:
-                print(
-                    f'==> waiting for send process to end (max {count} secs) ...')
-                count -= 1
-                time.sleep(1)
+        count = 9
+        while logger.sending:
+            print(
+                f'==> waiting for send process to end (max {count} secs) ...')
+            count -= 1
+            time.sleep(1)
         try:
             print('\nStoped')
             sys.exit(0)

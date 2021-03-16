@@ -39,16 +39,10 @@ class Amari_logger_iperf3(Amari_logger):
             influx_format_list.append(data)
         return influx_format_list
 
-    def influx_format_list_to_string_list(self, influx_format_list):
-        string_list = []
-        for each in influx_format_list:
-            string_list.append(
-                f"{each['fields']['Mbps']},{each['time']},{each['tags']['tos']}")
-        return string_list
-
     def run(self):
+        reverse_string = '-R' if self.reverse == True else ''
         process = subprocess.Popen(shlex.split(
-            f'iperf3 -p {self.port} --forceflush -c {self.ip} -t 0 -l 999 -f m -S {self.tos} -b {self.bitrate}M {self.reverse}'), stdout=subprocess.PIPE)
+            f'iperf3 -p {self.port} --forceflush -c {self.ip} -t 0 -l 999 -f m -S {self.tos} -b {self.bitrate}M {reverse_string}'), stdout=subprocess.PIPE)
 
         while True:
             output = process.stdout.readline()
@@ -83,7 +77,6 @@ if __name__ == '__main__':
         print('arg wrong, should be:\n python3 iperf3_log.py <ip> <port> <tos> <bitrate(M)> <Reverse?1:0>')
         sys.exit()
 
-    reverse_string = '-R' if reverse == True else ''
     logger = Amari_logger_iperf3(ip, port, tos, bitrate, reverse)
 
     print(
@@ -92,13 +85,12 @@ if __name__ == '__main__':
     try:
         logger.run()
     except KeyboardInterrupt:
-        if logger.sending:
-            count = 9
-            while logger.sending:
-                print(
-                    f'==> waiting for send process to end (max {count} secs) ...')
-                count -= 1
-                time.sleep(1)
+        count = 9
+        while logger.sending:
+            print(
+                f'==> waiting for send process to end (max {count} secs) ...')
+            count -= 1
+            time.sleep(1)
         try:
             print('\nStoped')
             sys.exit(0)

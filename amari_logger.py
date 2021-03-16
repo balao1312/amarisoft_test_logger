@@ -68,6 +68,11 @@ class Amari_logger:
         except Exception as e:
             print('==> send failed.')
             print('==> error msg:', e)
+            if self.send_fail_file.exists():
+                with open(self.send_fail_file, 'rb') as f:
+                    prev_data = pickle.load(f)
+                influx_format_list += prev_data
+
             with open(self.send_fail_file, 'wb') as f:
                 pickle.dump(influx_format_list, f)
             self.sending = False
