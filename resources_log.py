@@ -2,14 +2,10 @@
 
 import datetime
 import subprocess
-import pathlib
 from amari_logger import Amari_logger
 
 
 class Resources_logger(Amari_logger):
-
-    number_of_buffer = 1
-
     def __init__(self):
         super().__init__()
         self.log_file = self.log_folder.joinpath(
