@@ -7,7 +7,6 @@ from credential import db_config
 
 class Amari_logger:
     data_pool = []
-    data_send_buffer = []
     number_of_buffer = 60
     sending = False
 
@@ -31,19 +30,8 @@ class Amari_logger:
                 for each in self.data_pool:
                     f.write(each)
 
-            if self.send_fail_file.exists():
-                with open(self.send_fail_file, 'rb') as f:
-                    unsend_data = pickle.load(f)
-                self.data_send_buffer = self.string_list_to_influx_format_list(
-                    self.data_pool) + unsend_data
-
-                self.send_fail_file.unlink()
-            else:
-                self.data_send_buffer = self.string_list_to_influx_format_list(
-                    self.data_pool)
-
             thread_1 = threading.Thread(
-                target=self.send_to_influx, args=(self.data_send_buffer,))
+                target=self.send_to_influx, args=(self.string_list_to_influx_list(self.data_pool),))
             thread_1.start()
 
             self.data_pool = []
@@ -58,6 +46,14 @@ class Amari_logger:
             timeout=5,
             retries=2)
 
+        # add up those unsend_data if exists
+        if self.send_fail_file.exists():
+            with open(self.send_fail_file, 'rb') as f:
+                unsend_data = pickle.load(f)
+            influx_format_list += unsend_data
+
+            self.send_fail_file.unlink()
+
         try:
             print('==> check and try to send ...')
             self.sending = True
@@ -68,6 +64,8 @@ class Amari_logger:
         except Exception as e:
             print('==> send failed.')
             print('==> error msg:', e)
+
+            # check if there is new unsend_data generate by other thread
             if self.send_fail_file.exists():
                 with open(self.send_fail_file, 'rb') as f:
                     prev_data = pickle.load(f)

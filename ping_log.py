@@ -19,7 +19,7 @@ class Amari_logger_ping(Amari_logger):
             f'log_ping_{datetime.datetime.now().date()}')
         self.send_fail_file = self.log_folder.joinpath('send_fail_ping')
 
-    def string_list_to_influx_format_list(self, string_list) -> list:
+    def string_list_to_influx_list(self, string_list) -> list:
         influx_format_list = []
         for each in string_list:
             latency = round(float(each.split(',')[0]), 2)
