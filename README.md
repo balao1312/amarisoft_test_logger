@@ -4,7 +4,7 @@ Scrips for connection test result logging to **influxDB for **Grafana** (visuali
 
 # Usage
 
-* ###ping  
+* ### ping  
 
 	python3 ping_log.py (destination\_ip) (tos)
 	
@@ -14,7 +14,7 @@ Scrips for connection test result logging to **influxDB for **Grafana** (visuali
 	$ python3 ping_log.py 8.8.8.8 4
 	```
 	
-* ###iperf  
+* ### iperf  
 	python3 iperf3_log.py (destination\_ip) (destination\_port) (tos) (bitrate(M)) (reverse)
 	
 	example:
