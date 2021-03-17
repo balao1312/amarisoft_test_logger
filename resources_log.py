@@ -4,6 +4,7 @@ import datetime
 import subprocess
 from amari_logger import Amari_logger
 
+# TODO when on credential , file log
 
 class Resources_logger(Amari_logger):
     def __init__(self):

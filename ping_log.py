@@ -10,6 +10,7 @@ from amari_logger import Amari_logger
 
 
 class Amari_logger_ping(Amari_logger):
+
     def __init__(self, ip, tos):
         super().__init__()
         self.ip = ip
@@ -35,9 +36,20 @@ class Amari_logger_ping(Amari_logger):
             influx_format_list.append(data)
         return influx_format_list
 
+    def check_platform(self):
+        cmd = 'uname'
+        result = subprocess.check_output(
+            [cmd], stderr=subprocess.STDOUT).decode('utf8').strip()
+        return result
+
     def run(self):
+        if self.check_platform() == 'Darwin':
+            tos_option_string = '-z'
+        elif self.check_platform() == 'Linux':
+            tos_option_string = '-Q'
+
         process = subprocess.Popen(shlex.split(
-            f'ping {self.ip} -Q {self.tos}'), stdout=subprocess.PIPE)
+            f'ping {self.ip} {tos_option_string} {self.tos}'), stdout=subprocess.PIPE)
 
         while True:
             output = process.stdout.readline()
@@ -51,14 +63,15 @@ class Amari_logger_ping(Amari_logger):
                     latency = float(
                         list(filter(None, line.split(' ')))[6][5:10])
                     print(
-                        f'{latency} ms, tos: {self.tos}, {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
+                        f'{datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, tos: {self.tos}, latency: {latency} ms')
 
                     self.logging(latency, data_time)
                 except ValueError:
                     pass
-                except Exception as e:
-                    print(f'==> error: {e}')
+                except IndexError:
                     pass
+                except Exception as e:
+                    print(f'==> error: {e.__class__} {e}')
 
 
 if __name__ == '__main__':
@@ -76,11 +89,11 @@ if __name__ == '__main__':
         logger.run()
     except KeyboardInterrupt:
         print('\n\nInterrupted')
-        count = 9
-        while logger.sending:
+        sec_count = 9
+        while logger.is_sending:
             print(
-                f'==> waiting for send process to end (max {count} secs) ...')
-            count -= 1
+                f'==> waiting for send process to end (max {sec_count} secs) ...')
+            sec_count -= 1
             time.sleep(1)
         try:
             print('\nStoped')
@@ -88,4 +101,4 @@ if __name__ == '__main__':
         except SystemExit:
             os._exit(0)
     except Exception as e:
-        print(f'==> error: {e}')
+        print(f'==> error: {e.__class__} {e}')

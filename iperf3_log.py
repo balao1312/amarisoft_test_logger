@@ -10,6 +10,7 @@ from amari_logger import Amari_logger
 
 
 class Amari_logger_iperf3(Amari_logger):
+
     def __init__(self, ip, port, tos, bitrate, reverse):
         super().__init__()
         self.ip = ip
@@ -55,7 +56,7 @@ class Amari_logger_iperf3(Amari_logger):
                 try:
                     mbps = float(list(filter(None, line.split(' ')))[6])
                     print(
-                        f'{mbps} Mbit/s, tos:{self.tos}, {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
+                        f'{datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, tos:{self.tos}, bitrate: {mbps} Mbit/s')
 
                     self.logging(mbps, data_time)
                 except ValueError:
@@ -63,7 +64,7 @@ class Amari_logger_iperf3(Amari_logger):
                 except IndexError:
                     pass
                 except Exception as e:
-                    print(f'==> error: {e}')
+                    print(f'==> error: {e.__class__} {e}')
 
 
 if __name__ == '__main__':
@@ -85,11 +86,12 @@ if __name__ == '__main__':
     try:
         logger.run()
     except KeyboardInterrupt:
-        count = 9
-        while logger.sending:
+        print('\n\nInterrupted')
+        sec_count = 9
+        while logger.is_sending:
             print(
-                f'==> waiting for send process to end (max {count} secs) ...')
-            count -= 1
+                f'==> waiting for send process to end (max {sec_count} secs) ...')
+            sec_count -= 1
             time.sleep(1)
         try:
             print('\nStoped')
@@ -97,4 +99,4 @@ if __name__ == '__main__':
         except SystemExit:
             os._exit(0)
     except Exception as e:
-        print(f'==> error: {e}')
+        print(f'==> error: {e.__class__} {e}')
