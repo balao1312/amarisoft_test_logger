@@ -4,4 +4,4 @@ venv
 .vscode% 
 credential.py
 **/logs
-
+.vscode/settings.json
