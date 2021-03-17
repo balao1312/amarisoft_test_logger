@@ -6,7 +6,7 @@ Result will be log to plain text file and send to database periodically.
 
 ## Requirements
 
-Linux based environment with tool **iperf3** installed.  
+Linux based environment or Macintosh with tool **iperf3** installed.  
 
 ## Usage
 
