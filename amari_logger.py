@@ -83,13 +83,12 @@ class Amari_logger:
     def logging(self, data, data_time):
         self.data_pool.append(f'{data},{data_time},{self.tos}\n')
         if len(self.data_pool) >= self.number_of_buffer:
-            if self.is_send_to_db == True:
-                self.write_to_file()
 
+            self.write_to_file()
+
+            if self.is_send_to_db == True:
                 thread_1 = threading.Thread(
                     target=self.send_to_influx, args=(self.string_list_to_influx_list(self.data_pool),))
                 thread_1.start()
-            else:
-                self.write_to_file()
 
             self.data_pool = []
