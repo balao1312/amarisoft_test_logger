@@ -23,23 +23,6 @@ class Amari_logger_iperf3(Amari_logger):
             f'log_iperf3_{datetime.datetime.now().date()}')
         self.send_fail_file = self.log_folder.joinpath('send_fail_iperf3')
 
-    def string_list_to_influx_list(self, string_list) -> list:
-        influx_format_list = []
-        for each in string_list:
-            mbps = round(float(each.split(',')[0]), 4)
-            data_time = datetime.datetime.strptime(
-                each.split(',')[1][:-1], '%Y-%m-%d %H:%M:%S.%f')
-            tos = int(each.split(',')[2])
-
-            data = {
-                'measurement': 'iperf3',
-                'tags': {'tos': tos},
-                'time': data_time,
-                'fields': {'Mbps': mbps}
-            }
-            influx_format_list.append(data)
-        return influx_format_list
-
     def run(self):
         reverse_string = '-R' if self.reverse == True else ''
         process = subprocess.Popen(shlex.split(
@@ -52,16 +35,22 @@ class Amari_logger_iperf3(Amari_logger):
 
             if output:
                 line = output.strip().decode('utf8')
-                data_time = datetime.datetime.utcnow()
+                record_time = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
                 try:
                     mbps = float(list(filter(None, line.split(' ')))[6])
                     print(
                         f'{datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, tos:{self.tos}, bitrate: {mbps} Mbit/s')
+                    
+                    data = {
+                        'measurement': 'iperf3',
+                        'tags': {'tos': self.tos},
+                        'time': record_time,
+                        'fields': {'Mbps': mbps}
+                    }
 
-                    self.logging(mbps, data_time)
-                except ValueError:
-                    pass
-                except IndexError:
+                    self.logging(data)
+
+                except (ValueError, IndexError):
                     pass
                 except Exception as e:
                     print(f'==> error: {e.__class__} {e}')

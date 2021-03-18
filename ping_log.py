@@ -6,6 +6,7 @@ import sys
 import os
 import datetime
 import time
+import json
 from amari_logger import Amari_logger
 
 
@@ -19,22 +20,6 @@ class Amari_logger_ping(Amari_logger):
         self.log_file = self.log_folder.joinpath(
             f'log_ping_{datetime.datetime.now().date()}')
         self.send_fail_file = self.log_folder.joinpath('send_fail_ping')
-
-    def string_list_to_influx_list(self, string_list) -> list:
-        influx_format_list = []
-        for each in string_list:
-            latency = round(float(each.split(',')[0]), 2)
-            data_time = datetime.datetime.strptime(
-                each.split(',')[1][:-1], '%Y-%m-%d %H:%M:%S.%f')
-            tos = int(each.split(',')[2])
-            data = {
-                'measurement': 'ping',
-                'tags': {'tos': tos},
-                'time': data_time,
-                'fields': {'RTT': latency}
-            }
-            influx_format_list.append(data)
-        return influx_format_list
 
     def check_platform(self):
         cmd = 'uname'
@@ -58,17 +43,22 @@ class Amari_logger_ping(Amari_logger):
 
             if output:
                 line = output.strip().decode('utf8')
-                data_time = datetime.datetime.utcnow()
+                record_time = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
                 try:
                     latency = float(
                         list(filter(None, line.split(' ')))[6][5:10])
                     print(
                         f'{datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, tos: {self.tos}, latency: {latency} ms')
 
-                    self.logging(latency, data_time)
-                except ValueError:
-                    pass
-                except IndexError:
+                    data = {
+                        'measurement': 'ping',
+                        'tags': {'tos': self.tos},
+                        'time': record_time,
+                        'fields': {'RTT': latency}
+                    }
+                    self.logging(data)
+
+                except (ValueError, IndexError):
                     pass
                 except Exception as e:
                     print(f'==> error: {e.__class__} {e}')

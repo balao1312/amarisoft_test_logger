@@ -4,9 +4,11 @@ import datetime
 import subprocess
 from amari_logger import Amari_logger
 
-# TODO when on credential , file log
 
 class Resources_logger(Amari_logger):
+
+    number_of_buffer = 1
+
     def __init__(self):
         super().__init__()
         self.log_file = self.log_folder.joinpath(
@@ -85,7 +87,7 @@ class Resources_logger(Amari_logger):
             return 0
 
     def run(self):
-        now_time = datetime.datetime.utcnow()
+        record_time = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
         cpu_1 = self.get_cpu_usage()['1m']
         mem_usage = self.get_mem_usage()['usage']
         mem_total = self.get_mem_usage()['total']
@@ -95,7 +97,8 @@ class Resources_logger(Amari_logger):
         swap_total = self.get_swap_usage()['total']
         cpu_temp = self.get_cpu_temp()
         output = f'''
-            {now_time}
+            {record_time}
+
             cpu_1m: \t\t{cpu_1}
             mem_usage: \t\t{mem_usage}%
             mem_total: \t\t{mem_total}G
@@ -103,19 +106,20 @@ class Resources_logger(Amari_logger):
             storage_total: \t{storage_total}
             swap_usage: \t{swap_usage}%
             swap_total: \t{swap_total}G
-            temperature: \t{cpu_temp}'''
+            temperature: \t{cpu_temp}
+            '''
         print(output)
 
         data = {
             'measurement': 'amari_resources',
-            'time': now_time,
+            'time': record_time,
             'fields': {
                 'cpu_usage': float(cpu_1),
                 'mem_usage': float(mem_usage),
                 'temp': float(cpu_temp),
             }
         }
-        self.send_to_influx([data])
+        self.logging(data)
 
 
 if __name__ == '__main__':

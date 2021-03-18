@@ -1,6 +1,7 @@
 import pathlib
 import threading
 import pickle
+import json
 from influxdb import InfluxDBClient
 
 
@@ -35,7 +36,7 @@ class Amari_logger:
     def write_to_file(self):
         with open(self.log_file, 'a') as f:
             for each in self.data_pool:
-                f.write(each)
+                f.write(f'{json.dumps(each)}\n')
         print(f'==> data written to log file: {self.log_file}. ')
 
     def send_to_influx(self, influx_format_list):
@@ -80,15 +81,14 @@ class Amari_logger:
                 pickle.dump(influx_format_list, f)
             self.is_sending = False
 
-    def logging(self, data, data_time):
-        self.data_pool.append(f'{data},{data_time},{self.tos}\n')
+    def logging(self, data):
+        self.data_pool.append(data)
         if len(self.data_pool) >= self.number_of_buffer:
-
             self.write_to_file()
 
             if self.is_send_to_db == True:
                 thread_1 = threading.Thread(
-                    target=self.send_to_influx, args=(self.string_list_to_influx_list(self.data_pool),))
+                    target=self.send_to_influx, args=(self.data_pool,))
                 thread_1.start()
 
             self.data_pool = []
