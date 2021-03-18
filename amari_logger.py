@@ -22,8 +22,8 @@ class Amari_logger:
     except ModuleNotFoundError:
         print('\n==> credential.py is not found, send to db function is disabled.')
         is_send_to_db = False
-    except NameError as e:
-        print('db_config format incorrect, send to db function is disabled.')
+    except (NameError, ImportError, KeyError) as e:
+        print('\n==> db_config format incorrect, send to db function is disabled.')
         is_send_to_db = False
 
     def __init__(self):
