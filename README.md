@@ -35,3 +35,6 @@ Linux based environment or Macintosh with tool **iperf3** installed.
 	```
 	$ python3 resources_log.py
 	```
+	
+## Screenshot
+![alt text](https://github.com/balao1312/amarisoft_test_logger/blob/master/image.jpg?raw=true)
