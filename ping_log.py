@@ -6,7 +6,6 @@ import sys
 import os
 import datetime
 import time
-import json
 from amari_logger import Amari_logger
 
 
