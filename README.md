@@ -37,4 +37,4 @@ Linux based environment or Macintosh with tool **iperf3** installed.
 	```
 	
 ## Screenshot
-![alt text](https://github.com/balao1312/amarisoft_test_logger/blob/master/alogger.jpg?raw=true)
+![alt text](https://github.com/balao1312/amarisoft_test_logger/blob/master/alogger.png?raw=true)
