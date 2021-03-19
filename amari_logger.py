@@ -81,7 +81,7 @@ class Amari_logger:
                 pickle.dump(influx_format_list, f)
             self.is_sending = False
 
-    def logging(self, data):
+    def logging_with_buffer(self, data):
         self.data_pool.append(data)
         if len(self.data_pool) >= self.number_of_buffer:
             self.write_to_file()
@@ -92,3 +92,11 @@ class Amari_logger:
                 thread_1.start()
 
             self.data_pool = []
+    
+    def clear_buffer(self):
+        if self.data_pool:
+            self.write_to_file()
+            if self.is_send_to_db == True:
+                thread_2 = threading.Thread(
+                    target=self.send_to_influx, args=(self.data_pool,))
+                thread_2.start()

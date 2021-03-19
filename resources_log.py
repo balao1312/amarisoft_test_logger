@@ -119,7 +119,7 @@ class Resources_logger(Amari_logger):
                 'temp': float(cpu_temp),
             }
         }
-        self.logging(data)
+        self.logging_with_buffer(data)
 
 
 if __name__ == '__main__':

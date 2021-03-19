@@ -48,7 +48,7 @@ class Amari_logger_iperf3(Amari_logger):
                         'fields': {'Mbps': mbps}
                     }
 
-                    self.logging(data)
+                    self.logging_with_buffer(data)
 
                 except (ValueError, IndexError):
                     pass
@@ -64,7 +64,7 @@ if __name__ == '__main__':
         bitrate = sys.argv[4]
         reverse = True if sys.argv[5] == '1' else False
     except:
-        print('arg wrong, should be:\n python3 iperf3_log.py <ip> <port> <tos> <bitrate(M)> <Reverse?1:0>')
+        print('==> arg wrong, should be:\n python3 iperf3_log.py <ip> <port> <tos> <bitrate(M)> <Reverse?1:0>')
         sys.exit()
 
     logger = Amari_logger_iperf3(ip, port, tos, bitrate, reverse)
@@ -75,15 +75,17 @@ if __name__ == '__main__':
     try:
         logger.run()
     except KeyboardInterrupt:
-        print('\n\nInterrupted')
+        print('\n==> Interrupted.\n')
+        logger.clear_buffer()
+        time.sleep(0.1)
         sec_count = 9
         while logger.is_sending:
             print(
-                f'==> waiting for send process to end (max {sec_count} secs) ...')
+                f'==> waiting for process to end ... secs left max {sec_count}')
             sec_count -= 1
             time.sleep(1)
         try:
-            print('\nStoped')
+            print('\n==> Stoped')
             sys.exit(0)
         except SystemExit:
             os._exit(0)

@@ -55,7 +55,7 @@ class Amari_logger_ping(Amari_logger):
                         'time': record_time,
                         'fields': {'RTT': latency}
                     }
-                    self.logging(data)
+                    self.logging_with_buffer(data)
 
                 except (ValueError, IndexError):
                     pass
@@ -68,7 +68,7 @@ if __name__ == '__main__':
         ip = sys.argv[1]
         tos = sys.argv[2]
     except:
-        print('arg wrong, should be:\n python3 ping_log.py <ip> <tos>')
+        print('==> arg wrong, should be:\n python3 ping_log.py <ip> <tos>')
         sys.exit()
 
     logger = Amari_logger_ping(ip, tos)
@@ -77,15 +77,17 @@ if __name__ == '__main__':
     try:
         logger.run()
     except KeyboardInterrupt:
-        print('\n\nInterrupted')
+        print('\n==> Interrupted.\n')
+        logger.clear_buffer()
+        time.sleep(0.1)
         sec_count = 9
         while logger.is_sending:
             print(
-                f'==> waiting for send process to end (max {sec_count} secs) ...')
+                f'==> waiting for process to end ... secs left max {sec_count}')
             sec_count -= 1
             time.sleep(1)
         try:
-            print('\nStoped')
+            print('\n==> Stoped')
             sys.exit(0)
         except SystemExit:
             os._exit(0)
