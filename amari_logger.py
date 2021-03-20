@@ -98,7 +98,7 @@ class Amari_logger:
 
             self.data_pool = []
     
-    def clear_buffer(self):
+    def clean_buffer(self):
         if self.data_pool:
             self.write_to_file()
             if self.is_send_to_db == True:
