@@ -1,7 +1,6 @@
-venv
-**/__pycache__
 **/.DS_store
-.vscode% 
+venv
+.vscode
+__pycache__
 credential.py
-**/logs
-.vscode/settings.json
+logs
