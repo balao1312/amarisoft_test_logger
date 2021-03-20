@@ -3,11 +3,16 @@ import threading
 import pickle
 import json
 from influxdb import InfluxDBClient
+from config import config
 
 
 class Amari_logger:
+
+    db_timeout = config['db_connect_timeout']
+    db_retries = config['db_connect_retries']
+    number_of_buffer = config['number_of_buffer']
+    
     data_pool = []
-    number_of_buffer = 60
     is_sending = False
     is_send_to_db = True
 
@@ -47,8 +52,8 @@ class Amari_logger:
                 self.influxdb_username,
                 self.influxdb_password,
                 self.influxdb_dbname,
-                timeout=5,
-                retries=2)
+                timeout=self.db_timeout,
+                retries=self.db_retries)
         except Exception as e:
             print(f'==> error: {e.__class__} {e}')
 

@@ -14,8 +14,9 @@ class Resources_logger(Amari_logger):
         self.log_file = self.log_folder.joinpath(
             f'log_resources_{datetime.datetime.now().date()}')
         self.send_fail_file = self.log_folder.joinpath('send_fail_resources')
-
-    def get_cpu_usage(self):
+    
+    @property
+    def cpu_usage(self):
         cmd = 'uptime'
         result = subprocess.check_output(
             [cmd], stderr=subprocess.STDOUT).decode('utf8')
@@ -27,7 +28,8 @@ class Resources_logger(Amari_logger):
         }
         return cpu_load
 
-    def get_mem_usage(self):
+    @property
+    def mem_usage(self):
         cmd = 'free'
         result = subprocess.check_output(
             [cmd], timeout=3, stderr=subprocess.STDOUT).decode('utf8')
@@ -43,7 +45,8 @@ class Resources_logger(Amari_logger):
         }
         return mem_status
 
-    def get_swap_usage(self):
+    @property
+    def swap_usage(self):
         cmd = 'free'
         result = subprocess.check_output(
             [cmd], timeout=3, stderr=subprocess.STDOUT).decode('utf8')
@@ -59,7 +62,8 @@ class Resources_logger(Amari_logger):
         }
         return swap_status
 
-    def get_disk_usage(self):
+    @property
+    def disk_usage(self):
         cmd = 'df -h'
         result = subprocess.check_output(
             [cmd], timeout=3, shell=True, stderr=subprocess.STDOUT).decode('utf8')
@@ -72,7 +76,8 @@ class Resources_logger(Amari_logger):
         }
         return storage_status
 
-    def get_cpu_temp(self):
+    @property
+    def cpu_temp(self):
         cmd = 'sensors'
         try:
             result = subprocess.check_output(
@@ -88,25 +93,16 @@ class Resources_logger(Amari_logger):
 
     def run(self):
         record_time = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-        cpu_1 = self.get_cpu_usage()['1m']
-        mem_usage = self.get_mem_usage()['usage']
-        mem_total = self.get_mem_usage()['total']
-        storage_usage = self.get_disk_usage()['usage']
-        storage_total = self.get_disk_usage()['total']
-        swap_usage = self.get_swap_usage()['usage']
-        swap_total = self.get_swap_usage()['total']
-        cpu_temp = self.get_cpu_temp()
         output = f'''
             {record_time}
-
-            cpu_1m: \t\t{cpu_1}
-            mem_usage: \t\t{mem_usage}%
-            mem_total: \t\t{mem_total}G
-            storage_usage: \t{storage_usage}
-            storage_total: \t{storage_total}
-            swap_usage: \t{swap_usage}%
-            swap_total: \t{swap_total}G
-            temperature: \t{cpu_temp}
+            cpu_1m: \t\t{self.cpu_usage['1m']}
+            mem_usage: \t\t{self.mem_usage['usage']}%
+            mem_total: \t\t{self.mem_usage['total']}G
+            swap_usage: \t{self.swap_usage['usage']}%
+            swap_total: \t{self.swap_usage['total']}G
+            storage_usage: \t{self.disk_usage['usage']}
+            storage_total: \t{self.disk_usage['total']}
+            temperature: \t{self.cpu_temp}
             '''
         print(output)
 
@@ -114,9 +110,9 @@ class Resources_logger(Amari_logger):
             'measurement': 'amari_resources',
             'time': record_time,
             'fields': {
-                'cpu_usage': float(cpu_1),
-                'mem_usage': float(mem_usage),
-                'temp': float(cpu_temp),
+                'cpu_usage': float(self.cpu_usage['1m']),
+                'mem_usage': float(self.mem_usage['usage']),
+                'temp': float(self.cpu_temp),
             }
         }
         self.logging_with_buffer(data)
