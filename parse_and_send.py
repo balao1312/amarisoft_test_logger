@@ -13,7 +13,7 @@ if __name__ == '__main__':
         loc = sys.argv[1]
     except:
         print('==> arg wrong, should be:\n python3 parse_and_send.py <path for file or folder>')
-        sys.exit()
+        sys.exit(1)
 
     f_object = Path(loc)
 

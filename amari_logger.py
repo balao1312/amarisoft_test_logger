@@ -110,7 +110,6 @@ class Amari_logger:
                 thread_2.start()
 
     def parse_and_send(self, f_object):
-
         data_to_send = []
         if f_object.is_dir():
             for file in [file for file in f_object.iterdir() if file.name[:3] == 'log']:
