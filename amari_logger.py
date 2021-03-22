@@ -1,4 +1,4 @@
-import pathlib
+from pathlib import Path
 import threading
 import pickle
 import json
@@ -16,7 +16,8 @@ class Amari_logger:
     is_sending = False
     is_send_to_db = True
 
-    log_folder = pathlib.Path.cwd().joinpath('logs')
+    log_folder = Path.cwd().joinpath('logs')
+    send_fail_file = log_folder.joinpath('send_fail')
 
     try:
         from credential import db_config
@@ -55,7 +56,9 @@ class Amari_logger:
                 timeout=self.db_timeout,
                 retries=self.db_retries)
         except Exception as e:
+            print(f'==> can not establish connection to DB.')
             print(f'==> error: {e.__class__} {e}')
+            return
 
         # add up those unsend_data if exists
         if self.send_fail_file.exists():
@@ -105,3 +108,27 @@ class Amari_logger:
                 thread_2 = threading.Thread(
                     target=self.send_to_influx, args=(self.data_pool,))
                 thread_2.start()
+
+    def parse_and_send(self, f_object):
+
+        data_to_send = []
+        if f_object.is_dir():
+            for file in [file for file in f_object.iterdir() if file.name[:3] == 'log']:
+                print(f'==> parsing file: {file.name}')
+                try:
+                    with open(file, 'r') as f:
+                        for each_record in f.readlines():
+                            data_to_send.append(json.loads(each_record))
+                except Exception as e:
+                    print(f'==> \tskipping file {file}: {e.__class__} {e}')
+                    continue
+        else:
+            try:
+                with open(f_object, 'r') as f:
+                    for each_record in f.readlines():
+                        data_to_send.append(json.loads(each_record))
+            except Exception as e:
+                print(f'==> \tskipping file {f_object}: {e.__class__} {e}')
+                return
+
+        self.send_to_influx(data_to_send)

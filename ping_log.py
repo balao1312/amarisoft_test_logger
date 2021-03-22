@@ -19,7 +19,6 @@ class Ping_logger(Amari_logger):
 
         self.log_file = self.log_folder.joinpath(
             f'log_ping_{datetime.now().date()}')
-        self.send_fail_file = self.log_folder.joinpath('send_fail_ping')
 
     @property
     def platform(self):

@@ -22,7 +22,6 @@ class Iperf3_logger(Amari_logger):
 
         self.log_file = self.log_folder.joinpath(
             f'log_iperf3_{datetime.now().date()}')
-        self.send_fail_file = self.log_folder.joinpath('send_fail_iperf3')
 
     def run(self):
         reverse_string = '-R' if self.reverse == True else ''
