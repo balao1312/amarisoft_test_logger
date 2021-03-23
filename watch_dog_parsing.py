@@ -4,12 +4,14 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from amari_logger import Amari_logger
 
+
 class MyDirEventHandler(FileSystemEventHandler):
 
     def on_created(self, event):
         file = Path(event.src_path)
-        if file.is_dir():
+        if file.is_dir() or file.name == '.DS_Store':
             return
+
         print(f'\n==> new file detected: {file}')
         parser = Amari_logger()
         parser.parse_and_send(file)
@@ -17,7 +19,8 @@ class MyDirEventHandler(FileSystemEventHandler):
 
 
 if __name__ == "__main__":
-    watching_folder_path = Path(input('==> Please input the folder name to watch: '))
+    watching_folder_path = Path(
+        input('==> Please type in the folder name to watch: '))
 
     if not watching_folder_path.exists():
         watching_folder_path.mkdir()

@@ -11,7 +11,7 @@ class Amari_logger:
     db_timeout = config['db_connect_timeout']
     db_retries = config['db_connect_retries']
     number_of_buffer = config['number_of_buffer']
-    
+
     data_pool = []
     is_sending = False
     is_send_to_db = True
@@ -37,13 +37,13 @@ class Amari_logger:
         if not self.log_folder.exists():
             self.log_folder.mkdir()
         if self.is_send_to_db:
-            print(f'\n==> database used in influxdb: {self.influxdb_dbname}')
+            print(f'\n==> database used in influxdb: {self.influxdb_dbname}\n')
 
     def write_to_file(self):
         with open(self.log_file, 'a') as f:
             for each in self.data_pool:
                 f.write(f'{json.dumps(each)}\n')
-        print(f'==> data written to log file: {self.log_file}. ')
+        print(f'==> records saved to log file: {self.log_file}. ')
 
     def send_to_influx(self, influx_format_list):
         try:
@@ -69,17 +69,17 @@ class Amari_logger:
             self.send_fail_file.unlink()
 
         try:
-            print('==> trying sending to db ...')
+            print('==> trying to send to db ...')
             self.is_sending = True
             db_cli.write_points(influx_format_list)
-            print('==> data sent.')
+            print(f'==> {len(influx_format_list)} records sent.')
             self.is_sending = False
 
         except Exception as e:
             print('==> send failed.')
             print(f'==> error: {e.__class__} {e}')
 
-            # check if there is new unsend_data generate by other thread
+            # check if there is new unsend data generate by other thread
             if self.send_fail_file.exists():
                 with open(self.send_fail_file, 'rb') as f:
                     prev_data = pickle.load(f)
@@ -89,45 +89,44 @@ class Amari_logger:
                 pickle.dump(influx_format_list, f)
             self.is_sending = False
 
+    def data_landing(self):
+        self.write_to_file()
+        if self.is_send_to_db == True:
+            thread_1 = threading.Thread(
+                target=self.send_to_influx, args=(self.data_pool,))
+            thread_1.start()
+
     def logging_with_buffer(self, data):
         self.data_pool.append(data)
         if len(self.data_pool) >= self.number_of_buffer:
-            self.write_to_file()
-
-            if self.is_send_to_db == True:
-                thread_1 = threading.Thread(
-                    target=self.send_to_influx, args=(self.data_pool,))
-                thread_1.start()
-
+            self.data_landing()
             self.data_pool = []
-    
+
     def clean_buffer(self):
         if self.data_pool:
-            self.write_to_file()
-            if self.is_send_to_db == True:
-                thread_2 = threading.Thread(
-                    target=self.send_to_influx, args=(self.data_pool,))
-                thread_2.start()
+            self.data_landing()
+
+    def parse_single_file(self, file):
+        print(f'==> parsing file: {file}')
+        data_list = []
+        with open(file, 'r') as f:
+            string_data_list = f.readlines()
+        for nol, line in enumerate(string_data_list, start=1):
+            try:
+                data_list.append(json.loads(line))
+            except Exception as e:
+                print(f'==> \tskipping line {nol}:')
+                print(f'==> \t\t{e.__class__}, {e}')
+                continue
+        print('==> done.\n')
+        return data_list
 
     def parse_and_send(self, f_object):
         data_to_send = []
         if f_object.is_dir():
-            for file in [file for file in f_object.iterdir() if file.name[:3] == 'log']:
-                print(f'==> parsing file: {file.name}')
-                try:
-                    with open(file, 'r') as f:
-                        for each_record in f.readlines():
-                            data_to_send.append(json.loads(each_record))
-                except Exception as e:
-                    print(f'==> \tskipping file {file}: {e.__class__} {e}')
-                    continue
+            for each_file in [file for file in f_object.iterdir() if file.name[:3] == 'log']:
+                data_to_send += self.parse_single_file(each_file)
         else:
-            try:
-                with open(f_object, 'r') as f:
-                    for each_record in f.readlines():
-                        data_to_send.append(json.loads(each_record))
-            except Exception as e:
-                print(f'==> \tskipping file {f_object}: {e.__class__} {e}')
-                return
+            data_to_send += self.parse_single_file(f_object)
 
         self.send_to_influx(data_to_send)

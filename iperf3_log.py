@@ -77,7 +77,7 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         print('\n==> Interrupted.\n')
         logger.clean_buffer()
-        sleep(0.1)
+        sleep(0.1)  # for avoiding the bug I cannot figure out
         max_sec_count = logger.db_retries * logger.db_timeout
         countdown = copy(max_sec_count)
         while logger.is_sending:
