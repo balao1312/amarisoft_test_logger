@@ -108,9 +108,15 @@ class Amari_logger:
 
     def parse_single_file(self, file):
         print(f'==> parsing file: {file}')
+        try:
+            with open(file, 'r') as f:
+                string_data_list = f.readlines()
+        except UnicodeDecodeError as e:
+                print(f'==> \tskipping file {file}:')
+                print(f'==> \t\t{e.__class__}, {e}')
+                return []
+
         data_list = []
-        with open(file, 'r') as f:
-            string_data_list = f.readlines()
         for nol, line in enumerate(string_data_list, start=1):
             try:
                 data_list.append(json.loads(line))
