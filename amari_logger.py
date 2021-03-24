@@ -2,7 +2,6 @@ from pathlib import Path
 import threading
 import pickle
 import json
-from influxdb import InfluxDBClient
 from config import config
 
 
@@ -20,6 +19,7 @@ class Amari_logger:
     send_fail_file = log_folder.joinpath('send_fail')
 
     try:
+        from influxdb import InfluxDBClient
         from credential import db_config
         influxdb_ip = db_config['influxdb_ip']
         influxdb_port = db_config['influxdb_port']
@@ -27,7 +27,7 @@ class Amari_logger:
         influxdb_password = db_config['influxdb_password']
         influxdb_dbname = db_config['influxdb_dbname']
     except ModuleNotFoundError:
-        print('\n==> credential.py is not found, send to db function is disabled.')
+        print('\n==> module influxdb or credential.py is not found, send to db function is disabled.')
         is_send_to_db = False
     except (NameError, ImportError, KeyError) as e:
         print('\n==> db_config format incorrect, send to db function is disabled.')
