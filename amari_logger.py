@@ -47,7 +47,7 @@ class Amari_logger:
 
     def send_to_influx(self, influx_format_list):
         try:
-            db_cli = InfluxDBClient(
+            db_cli = self.InfluxDBClient(
                 self.influxdb_ip,
                 self.influxdb_port,
                 self.influxdb_username,
