@@ -90,7 +90,7 @@ class Resources_logger(Amari_logger):
             # print(result)
             temp_status = result.split('\n')[6].split(' ')
             temp = temp_status[4][1:-2]
-            return temp
+            return temp if temp else 0
         except Exception as e:
             print("==> couldn't get temp information")
             print('==> error msg: ', e)
