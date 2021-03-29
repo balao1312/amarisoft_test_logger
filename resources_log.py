@@ -8,6 +8,11 @@ from amari_logger import Amari_logger
 class Resources_logger(Amari_logger):
 
     number_of_buffer = 1
+    try:
+        from config import config
+        device = config['resouces_device']
+    except:
+        device = 'undefined'
 
     def __init__(self):
         super().__init__()
@@ -108,6 +113,7 @@ class Resources_logger(Amari_logger):
 
         data = {
             'measurement': 'amari_resources',
+            'tags': {'device': self.device},
             'time': record_time,
             'fields': {
                 'cpu_usage': float(self.cpu_usage['1m']),
