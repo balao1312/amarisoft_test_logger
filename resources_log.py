@@ -18,7 +18,6 @@ class Resources_logger(Amari_logger):
         super().__init__()
         self.log_file = self.log_folder.joinpath(
             f'log_resources_{datetime.datetime.now().date()}')
-        self.send_fail_file = self.log_folder.joinpath('send_fail_resources')
     
     @property
     def cpu_usage(self):
