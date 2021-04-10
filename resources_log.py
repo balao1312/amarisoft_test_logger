@@ -87,8 +87,21 @@ class Resources_logger(Amari_logger):
             result = subprocess.check_output(
                 [cmd], timeout=3, shell=True, stderr=subprocess.STDOUT).decode('utf8')
             # print(result)
-            temp_status = result.split('\n')[6].split(' ')
-            temp = temp_status[4][1:-2]
+            temp = result.split('\n')[2][16:20]
+            return temp if temp else 0
+        except Exception as e:
+            print("==> couldn't get temp information")
+            print('==> error msg: ', e)
+            return 0
+    
+    @property
+    def cpu_temp_pi(self):
+        cmd = 'vcgencmd measure_temp'
+        try:
+            result = subprocess.check_output(
+                [cmd], timeout=3, shell=True, stderr=subprocess.STDOUT).decode('utf8')
+            # print(result)
+            temp = result[5:9]
             return temp if temp else 0
         except Exception as e:
             print("==> couldn't get temp information")
