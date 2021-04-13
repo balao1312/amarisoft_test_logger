@@ -19,6 +19,8 @@ class Iperf3_logger(Amari_logger):
         self.port = port
         self.bitrate = bitrate
         self.reverse = reverse
+        self.record_count = 0
+        self.total_mbps = 0
 
         self.log_file = self.log_folder.joinpath(
             f'log_iperf3_{datetime.now().date()}')
@@ -26,7 +28,7 @@ class Iperf3_logger(Amari_logger):
     def run(self):
         reverse_string = '-R' if self.reverse == True else ''
         process = subprocess.Popen(shlex.split(
-            f'iperf3 -p {self.port} --forceflush -c {self.ip} -t 0 -l 999 -f m -S {self.tos} -b {self.bitrate}M {reverse_string}'), stdout=subprocess.PIPE)
+            f'iperf3 -p {self.port} --forceflush -c {self.ip} -t 0 -l 999 -f m -S {self.tos} -b {self.bitrate}M {reverse_string} -u'), stdout=subprocess.PIPE)
 
         while True:
             output = process.stdout.readline()
@@ -34,10 +36,12 @@ class Iperf3_logger(Amari_logger):
                 break
 
             if output:
+                self.record_count += 1
                 line = output.strip().decode('utf8')
                 record_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
                 try:
                     mbps = float(list(filter(None, line.split(' ')))[6])
+                    self.total_mbps += mbps
                     print(
                         f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, tos:{self.tos}, bitrate: {mbps} Mbit/s')
 
@@ -80,6 +84,7 @@ if __name__ == '__main__':
         sleep(0.1)  # for avoiding the bug I cannot figure out
         max_sec_count = logger.db_retries * logger.db_timeout
         countdown = copy(max_sec_count)
+        print(f'Average: {logger.total_mbps / logger.record_count} Mbit/s')
         while logger.is_sending:
             if countdown < max_sec_count:
                 print(
@@ -93,4 +98,3 @@ if __name__ == '__main__':
             os._exit(0)
     except Exception as e:
         print(f'==> error: {e.__class__} {e}')
-
