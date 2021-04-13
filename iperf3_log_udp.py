@@ -36,11 +36,11 @@ class Iperf3_logger(Amari_logger):
                 break
 
             if output:
-                self.record_count += 1
                 line = output.strip().decode('utf8')
                 record_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
                 try:
                     mbps = float(list(filter(None, line.split(' ')))[6])
+                    self.record_count += 1
                     self.total_mbps += mbps
                     print(
                         f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, tos:{self.tos}, bitrate: {mbps} Mbit/s')
@@ -84,7 +84,7 @@ if __name__ == '__main__':
         sleep(0.1)  # for avoiding the bug I cannot figure out
         max_sec_count = logger.db_retries * logger.db_timeout
         countdown = copy(max_sec_count)
-        print(f'Average: {logger.total_mbps / logger.record_count} Mbit/s')
+        print(f'\n==> Total records: {logger.record_count}, Average: {logger.total_mbps / logger.record_count} Mbit/s')
         while logger.is_sending:
             if countdown < max_sec_count:
                 print(
