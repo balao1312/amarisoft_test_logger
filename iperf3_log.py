@@ -8,25 +8,32 @@ from time import sleep
 from datetime import datetime
 from copy import copy
 from amari_logger import Amari_logger
+import argparse
 
 
 class Iperf3_logger(Amari_logger):
 
-    def __init__(self, ip, port, tos, bitrate, reverse):
+    def __init__(self, ip, port, tos, bitrate, reverse, udp, secs):
         super().__init__()
         self.ip = ip
         self.tos = tos
         self.port = port
         self.bitrate = bitrate
         self.reverse = reverse
+        self.udp = udp
+        self.secs = secs
+
+        self.record_count = 0
+        self.total_mbps = 0
 
         self.log_file = self.log_folder.joinpath(
             f'log_iperf3_{datetime.now().date()}')
 
     def run(self):
         reverse_string = '-R' if self.reverse == True else ''
+        udp_string = '-u' if self.reverse == True else ''
         process = subprocess.Popen(shlex.split(
-            f'iperf3 -p {self.port} --forceflush -c {self.ip} -t 0 -l 999 -f m -S {self.tos} -b {self.bitrate}M {reverse_string}'), stdout=subprocess.PIPE)
+            f'iperf3 -c {self.ip} -p {self.port} -S {self.tos} -b {self.bitrate}M {reverse_string} {udp_string} -t {self.secs} --forceflush -l 999 -f m'), stdout=subprocess.PIPE)
 
         while True:
             output = process.stdout.readline()
@@ -38,6 +45,9 @@ class Iperf3_logger(Amari_logger):
                 record_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
                 try:
                     mbps = float(list(filter(None, line.split(' ')))[6])
+                    print(line)
+                    self.record_count += 1
+                    self.total_mbps += mbps
                     print(
                         f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, tos:{self.tos}, bitrate: {mbps} Mbit/s')
 
@@ -57,20 +67,20 @@ class Iperf3_logger(Amari_logger):
 
 
 if __name__ == '__main__':
-    try:
-        ip = sys.argv[1]
-        port = sys.argv[2]
-        tos = sys.argv[3]
-        bitrate = sys.argv[4]
-        reverse = True if sys.argv[5] == '1' else False
-    except:
-        print('==> arg wrong, should be:\n python3 iperf3_log.py <ip> <port> <tos> <bitrate(M)> <Reverse?1:0>')
-        sys.exit(1)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-c', '--host', required=True, type=str, help='iperf server ip')
+    parser.add_argument('-p', '--port', required=True, type=int, help='iperf server port')
+    parser.add_argument('-S', '--tos', default=0, type=int, help='type of service value')
+    parser.add_argument('-b', '--bitrate', default=0, type=int, help='the limit of bitrate(M)')
+    parser.add_argument('-R', '--reverse', action="store_true", help='reverse to downlink from iperf server')
+    parser.add_argument('-u', '--udp', action="store_true", help='reverse to downlink from iperf server')
+    parser.add_argument('-t', '--time', default=0, help='reverse to downlink from iperf server')
+    args = parser.parse_args()
 
-    logger = Iperf3_logger(ip, port, tos, bitrate, reverse)
+    logger = Iperf3_logger(args.host, args.port, args.tos, args.bitrate, args.reverse, args.udp, args.time)
 
     print(
-        f'==> start iperf3ing : {ip}:{port}, tos:{tos}, bitrate:{bitrate}M, reverse:{reverse}\n')
+        f'==> start iperf3ing : {args.host}:{args.port}, tos:{args.tos}, bitrate:{args.bitrate}M, reverse:{args.reverse}, udp:{args.udp}, exec_time:{args.time}\n')
 
     try:
         logger.run()
