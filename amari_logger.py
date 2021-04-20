@@ -81,6 +81,7 @@ class Amari_logger:
 
             # check if there is new unsend data generate by other thread
             if self.send_fail_file.exists():
+                print('==> found previous unsent data.')
                 with open(self.send_fail_file, 'rb') as f:
                     prev_data = pickle.load(f)
                 influx_format_list += prev_data
