@@ -5,6 +5,9 @@ import datetime
 import pathlib
 import re
 import sys
+import time
+import os
+from copy import copy
 from config import config
 
 
@@ -99,4 +102,24 @@ class ros2_logger(Amari_logger):
 
 if __name__ == '__main__':
     logger = ros2_logger()
-    logger.run()
+    try:
+        logger.run()
+    except KeyboardInterrupt:
+        print('\n==> Interrupted.\n')
+        logger.clean_buffer()
+        time.sleep(0.1)  # for avoiding the bug I cannot figure out
+        max_sec_count = logger.db_retries * logger.db_timeout
+        countdown = copy(max_sec_count)
+        while logger.is_sending:
+            if countdown < max_sec_count:
+                print(
+                    f'==> waiting for process to end ... secs left max {countdown}')
+            countdown -= 1
+            time.sleep(1)
+        try:
+            print('\n==> Exited')
+            sys.exit(0)
+        except SystemExit:
+            os._exit(0)
+    except Exception as e:
+        print(f'==> error: {e.__class__} {e}')
