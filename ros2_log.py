@@ -64,9 +64,11 @@ class ros2_logger(Amari_logger):
 
     def run(self):
         # use python subprocess to start linux command and monitor standout
-        process = subprocess.Popen(shlex.split(
-            f'ros2 topic echo /pub'), shell=False, stdout=subprocess.PIPE)
-            # f'python3 -u basic_listener.py'), shell=False, stdout=subprocess.PIPE)
+        # cmd = 'ros2 topic echo /pub'
+        cmd = 'python3 -u basic_listener.py'
+
+        print(f'==> cmd send: {cmd}')
+        process = subprocess.Popen(shlex.split(cmd), shell=False, stdout=subprocess.PIPE)
 
         # use python dictionary to record which column value are at the same time
         # (due to python subprocess can only read ONE line in standout)

@@ -14,7 +14,7 @@ import re
 
 class Iperf3_logger(Amari_logger):
 
-    def __init__(self, host, port, tos, bitrate=0, reverse=False, udp=False, exec_secs=0, buffer_length=None):
+    def __init__(self, host, port, tos, bitrate, reverse, udp, exec_secs, buffer_length):
         super().__init__()
         self.host = host
         self.tos = tos
@@ -93,7 +93,7 @@ if __name__ == '__main__':
                         type=str, help='the limit of bitrate(M/K)')
     parser.add_argument('-t', '--exec_secs', default=0,
                         help='reverse to downlink from iperf server')
-    parser.add_argument('-l', '--buffer_length',
+    parser.add_argument('-l', '--buffer_length', default=999,
                         help='length of buffer to read or write (default 128 KB for TCP, 8KB for UDP)')
 
     parser.add_argument('-u', '--udp', action="store_true",
