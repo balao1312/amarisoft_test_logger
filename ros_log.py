@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+
 from amari_logger import Amari_logger
 import subprocess
 import shlex
