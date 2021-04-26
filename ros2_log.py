@@ -4,7 +4,6 @@ from amari_logger import Amari_logger
 import subprocess
 import shlex
 import datetime
-import pathlib
 import re
 import sys
 import time
@@ -28,7 +27,8 @@ class ros2_logger(Amari_logger):
     def parse_and_send_data(self, dict, tag):
         keys_to_delete = []
         for time_string, value in dict.items():
-            time_object = datetime.datetime.strptime(time_string, '%Y-%m-%d %H:%M:%S')
+            time_object = datetime.datetime.strptime(
+                time_string, '%Y-%m-%d %H:%M:%S')
             if datetime.datetime.utcnow() - time_object > self.buffer:
                 value = sorted(value)
                 print(f'{time_string}, {tag} alive:', value)
@@ -48,17 +48,17 @@ class ros2_logger(Amari_logger):
                     string_to_send += each
                     if each != value[-1]:
                         string_to_send += ', '
-                        
+
                 data = {
                     'measurement': 'ros2_log',
                     'tags': {'column': tag},
                     'time': time_string,
-                    'fields': {f'{tag}_alive' : string_to_send}
+                    'fields': {f'{tag}_alive': string_to_send}
                 }
                 self.logging_with_buffer(data)
 
                 keys_to_delete.append(time_string)
- 
+
         for each in keys_to_delete:
             del dict[each]
 
@@ -68,7 +68,8 @@ class ros2_logger(Amari_logger):
         cmd = 'python3 -u basic_listener.py'
 
         print(f'==> cmd send: {cmd}')
-        process = subprocess.Popen(shlex.split(cmd), shell=False, stdout=subprocess.PIPE)
+        process = subprocess.Popen(shlex.split(
+            cmd), shell=False, stdout=subprocess.PIPE)
 
         # use python dictionary to record which column value are at the same time
         # (due to python subprocess can only read ONE line in standout)
@@ -79,15 +80,12 @@ class ros2_logger(Amari_logger):
             if output:
                 line = output.strip().decode('utf8')
                 ts = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-                words_in_bracket = re.compile(r'\[(.*?)\]')
-                # get data in [ ]
+                words_in_bracket = re.compile(r'\[(.*?)\]')  # get data in [ ]
                 result = re.findall(words_in_bracket, line)
                 if result and len(result[0]) > 1:
                     data_set = result[0].split(', ')
-                    # target the "data:[..........]"
                     if int(data_set[3]) > 0:
                         try:
-                            # data_set[3] = station_id
                             self.log_temp_plc[ts].add(data_set[3])
                         except:
                             self.log_temp_plc[ts] = set((data_set[3],))
@@ -100,8 +98,8 @@ class ros2_logger(Amari_logger):
 
                 # check periodically
                 if datetime.datetime.now().second % self.interval == 0:
-                    self.parse_and_send_data(self.log_temp_plc, 'plc') 
-                    self.parse_and_send_data(self.log_temp_ue, 'ue') 
+                    self.parse_and_send_data(self.log_temp_plc, 'plc')
+                    self.parse_and_send_data(self.log_temp_ue, 'ue')
 
 
 if __name__ == '__main__':
@@ -111,7 +109,7 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         print('\n==> Interrupted.\n')
         logger.clean_buffer()
-        time.sleep(0.1)  # for avoiding the bug I cannot figure out
+        time.sleep(0.1)
         max_sec_count = logger.db_retries * logger.db_timeout
         countdown = copy(max_sec_count)
         while logger.is_sending:
