@@ -20,17 +20,19 @@ class Amari_logger:
 
     try:
         from influxdb import InfluxDBClient
+    except ModuleNotFoundError:
+        print('\n==> module influxdb is not found, send to db function is disabled.')
+        is_send_to_db = False
+
+    try:
         from credential import db_config
         influxdb_ip = db_config['influxdb_ip']
         influxdb_port = db_config['influxdb_port']
         influxdb_username = db_config['influxdb_username']
         influxdb_password = db_config['influxdb_password']
         influxdb_dbname = db_config['influxdb_dbname']
-    except ModuleNotFoundError:
-        print('\n==> module influxdb or credential.py is not found, send to db function is disabled.')
-        is_send_to_db = False
     except (NameError, ImportError, KeyError) as e:
-        print('\n==> db_config format incorrect, send to db function is disabled.')
+        print('\n==> credential.py is not found or db_config format incorrect, send to db function is disabled.')
         is_send_to_db = False
 
     def __init__(self):
@@ -76,7 +78,7 @@ class Amari_logger:
             self.is_sending = False
 
         except Exception as e:
-            print('==> send failed.')
+            print('==> send failed. put data to send_fail.')
             print(f'==> error: {e.__class__} {e}')
 
             # check if there is new unsend data generate by other thread
