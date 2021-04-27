@@ -64,7 +64,7 @@ class Iperf3_logger(Amari_logger):
                         continue
 
                     print(
-                        f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, dst:{self.host} tos:{self.tos}, bitrate: {mbps} Mbit/s')
+                        f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, dst:{self.host}, tos:{self.tos}, bitrate: {mbps} Mbit/s')
 
                     data = {
                         'measurement': 'iperf3',

@@ -48,7 +48,7 @@ class Ping_logger(Amari_logger):
                     latency = float(
                         list(filter(None, line.split(' ')))[6][5:10])
                     print(
-                        f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, dst:{self.ip} tos: {self.tos}, latency: {latency} ms')
+                        f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, dst:{self.ip}, tos: {self.tos}, latency: {latency} ms')
 
                     data = {
                         'measurement': 'ping',
