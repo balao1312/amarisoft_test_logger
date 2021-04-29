@@ -28,7 +28,7 @@ class ros2_logger(Amari_logger):
         self.log_file = self.log_folder.joinpath(
             f'log_ros2_{datetime.datetime.now().date()}')
 
-    def lineNotifyMessage(line_token, msg):
+    def lineNotifyMessage(self, line_token, msg):
         line_headers = {
             "Authorization": "Bearer " + line_token,
             "Content-Type": "application/x-www-form-urlencoded"
@@ -42,7 +42,7 @@ class ros2_logger(Amari_logger):
     def check_if_status_changed(self, tag, value):
         if tag not in self.last_value:
             return
-            
+
         if not value == self.last_value[tag]:
             try:
                 msg = f'\n{tag} status change detected:\n{datetime.datetime.now()}\nbefore: {self.last_value[tag]}\nnow: {value}'
