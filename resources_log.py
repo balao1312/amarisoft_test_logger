@@ -91,26 +91,28 @@ class Resources_logger(Amari_logger):
 
     @property
     def cpu_temp(self):
+        cmd = 'cat /etc/os-release'
+        result = subprocess.check_output(
+            [cmd], timeout=3, shell=True, stderr=subprocess.STDOUT).decode('utf8')
+        if result.split('\n')[1] == 'NAME="Raspbian GNU/Linux"':
+            cmd = 'vcgencmd measure_temp'
+            try:
+                result = subprocess.check_output(
+                    [cmd], timeout=3, shell=True, stderr=subprocess.STDOUT).decode('utf8')
+                # print(result)
+                temp = result[5:9]
+                return temp if temp else 0
+            except Exception as e:
+                print("==> couldn't get temp information")
+                print('==> error msg: ', e)
+                return 0
+
         cmd = 'sensors'
         try:
             result = subprocess.check_output(
                 [cmd], timeout=3, shell=True, stderr=subprocess.STDOUT).decode('utf8')
             # print(result)
             temp = result.split('\n')[2][16:20]
-            return temp if temp else 0
-        except Exception as e:
-            print("==> couldn't get temp information")
-            print('==> error msg: ', e)
-            return 0
-    
-    @property
-    def cpu_temp_pi(self):
-        cmd = 'vcgencmd measure_temp'
-        try:
-            result = subprocess.check_output(
-                [cmd], timeout=3, shell=True, stderr=subprocess.STDOUT).decode('utf8')
-            # print(result)
-            temp = result[5:9]
             return temp if temp else 0
         except Exception as e:
             print("==> couldn't get temp information")
