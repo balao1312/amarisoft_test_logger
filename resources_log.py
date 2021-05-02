@@ -135,7 +135,7 @@ class Resources_logger(Amari_logger):
         print(output)
 
         data = {
-            'measurement': 'amari_resources',
+            'measurement': 'resources',
             'tags': {'device': self.device},
             'time': record_time,
             'fields': {
