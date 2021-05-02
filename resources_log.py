@@ -58,6 +58,15 @@ class Resources_logger(Amari_logger):
         fields = list(filter(None, line))
         swap_total = fields[1]
         swap_available = fields[3]
+
+        if swap_total == '0':
+            swap_status = {
+                'total': 0,
+                'usage': 0,
+            }
+
+            return swap_status
+        
         swap_usage = round(((1-int(swap_available) / int(swap_total)))*100, 1)
         swap_total_G = round((int(swap_total) / 1024 / 1024), 1)
         swap_status = {
