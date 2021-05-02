@@ -133,6 +133,7 @@ class Resources_logger(Amari_logger):
             temperature: \t{self.cpu_temp}
             '''
         print(output)
+        print(f'\device to tag in db: {self.device}')
 
         data = {
             'measurement': 'resources',
