@@ -20,7 +20,10 @@ class ros2_logger(Amari_logger):
     buffer = datetime.timedelta(seconds=1)
 
     last_value = {}
-    token = 'xrAUKB7KDmFh0CC97D1hgMl7NDNRimXK9GDF7SJOTFw'
+    notify_msg = ''
+    last_value_2_before = {}
+    token = 'xrAUKB7KDmFh0CC97D1hgMl7NDNRimXK9GDF7SJOTFw' # anest line group
+    # token = '2unn268Rs1CkJ5JWGApbmwCPEB9qwSldVV5NNmukbFo' # balao test
 
     def __init__(self):
         super().__init__()
@@ -39,16 +42,39 @@ class ros2_logger(Amari_logger):
                           headers=line_headers, params=payload)
         return r.status_code
 
+    def show_on_off(self, last, now):
+        text = ''
+        for each in now:
+            if each not in last:
+                text += f'{each} is now up\n'
+
+        for each in last:
+            if each not in now:
+                text += f'{each} is now down\n'
+        return text
+    
     def check_if_status_changed(self, tag, value):
         if tag not in self.last_value:
             return
 
-        if not value == self.last_value[tag]:
+        if tag not in self.last_value_2_before:
+            self.last_value_2_before[tag] = self.last_value[tag]
+            return
+
+        if not value == self.last_value_2_before[tag]:
+            print(f'==> {tag} status change detected, trying to send notify...')
             try:
-                msg = f'\n{tag} status change detected:\n{datetime.datetime.now()}\nbefore: {self.last_value[tag]}\nnow: {value}'
-                self.lineNotifyMessage(self.token, msg)
+                self.notify_msg = f'\n{tag} status change detected:\n{datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\nbefore: {self.last_value_2_before[tag]}\nnow: {value}\nsummarized:\n{self.show_on_off(self.last_value_2_before[tag], value)}'
+                self.lineNotifyMessage(self.token, self.notify_msg)
+                print('==> notify sent.')
             except Exception as e:
-                print(f'send line notify error: {e.__class__}, \n{e}')
+                print(f'==> send line notify error: {e.__class__}, \n{e}')
+            
+            del self.last_value_2_before[tag]
+            del self.last_value[tag]
+            return
+
+        self.last_value_2_before[tag] = self.last_value[tag]
 
     def parse_and_send_data(self, dict, tag):
         keys_to_delete = []
@@ -59,6 +85,7 @@ class ros2_logger(Amari_logger):
                 value = sorted(value)
                 print(f'{time_string}, {tag} alive:', value)
 
+                # check if status changed
                 self.check_if_status_changed(tag, value)
                 self.last_value[tag] = value
 
@@ -93,8 +120,8 @@ class ros2_logger(Amari_logger):
 
     def run(self):
         # use python subprocess to start linux command and monitor standout
-        # cmd = 'ros2 topic echo /pub'
-        cmd = 'python3 -u basic_listener.py'
+        cmd = 'ros2 topic echo /pub'
+        # cmd = 'python3 -u basic_listener.py'
 
         print(f'==> cmd send: {cmd}')
         process = subprocess.Popen(shlex.split(
@@ -153,4 +180,4 @@ if __name__ == '__main__':
         except SystemExit:
             os._exit(0)
     except Exception as e:
-        print(f'==> error: {e.__class__} {e}')
+        print(f'==> main func error: {e.__class__} {e}')
