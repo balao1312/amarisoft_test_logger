@@ -73,7 +73,7 @@ class Ping_logger(Amari_logger):
                     self.logging_with_buffer(data)
                 
                     if latency > self.RTT_warn_cap:
-                        msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\ngot a RTT from {self.ip} greater then {self.RTT_warn_cap} ms.\nvalue: {latency} ms'
+                        msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\ngot a RTT from {self.ip} greater than {self.RTT_warn_cap} ms.\nvalue: {latency} ms'
                         self.lineNotifyMessage(self.line_token, msg)
 
                 except (ValueError, IndexError):
