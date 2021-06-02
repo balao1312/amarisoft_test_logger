@@ -1,5 +1,7 @@
 #!/usr/bin/python3
 
+# log for each station status separately
+
 from amari_logger import Amari_logger
 import subprocess
 import shlex

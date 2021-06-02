@@ -1,5 +1,8 @@
 #!/usr/bin/python3
 
+# log time interval set to 1 miunte
+# for avoiding too much notification due to poor network
+
 from amari_logger import Amari_logger
 import subprocess
 import shlex
