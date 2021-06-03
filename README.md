@@ -6,10 +6,10 @@ Result will be log to plain text file and send to database periodically.
 
 ## Requirements
 
-- Linux based environment or Macintosh with tool **iperf3** installed  
+- Linux based environment or Macintosh with tool **iperf3(version 3.7+)** installed  
 - Running influxdb server  
 - Grafana service to visualize data in influxdb (optional)
-- Pip install -r requirements.txt
+- Pip3 install -r requirements.txt
 
 ## Usage
 
@@ -24,12 +24,15 @@ Result will be log to plain text file and send to database periodically.
 	
 * ### iperf  
 	Test connection thoughtput.  
-	Syntax : `python3 iperf3_log.py (destination ip) (destination port) (tos) (bitrate(M)) (reverse)`  
-	example:
+	Syntax : `python3 iperf3_log.py [options like origin iperf3 options]`  
+	Example:
 
 	```
-	$ python3 iperf3_log.py 127.0.0.1 5201 44 20 0
+	$ python3 iperf3_log.py -c 192.168.0.50 -t 0 -b 5M -p 5202 -R
 	```
+	
+	For futher infomation you can  `$ python3 iperf3_log.py --help`   
+
 * ### resources
 	Log resources usage of base station computer. (usually put in linux crontab) (linux only)   
 	Syntax : `python3 resources_log.py`  
@@ -74,5 +77,9 @@ db_config = {
 ```
   
 ## Screenshot
+### Chart from Grafana
 ![alt text](https://github.com/balao1312/amarisoft_test_logger/blob/master/alogger.png?raw=true)
+
+
+### Watchdog Running
 ![alt text](https://github.com/balao1312/amarisoft_test_logger/blob/master/watchdogex.png?raw=true)
