@@ -48,7 +48,7 @@ class Ping_logger(Amari_logger):
             tos_option_string = '-Q'
 
         process = subprocess.Popen(shlex.split(
-            f'ping {self.ip} {tos_option_string} {self.tos} -c 10'), stdout=subprocess.PIPE)
+            f'ping {self.ip} {tos_option_string} {self.tos} -c 60'), stdout=subprocess.PIPE)
 
         while True:
             output = process.stdout.readline()
