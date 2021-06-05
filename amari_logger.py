@@ -1,29 +1,26 @@
 from pathlib import Path
+from re import A
 import threading
 import pickle
 import json
+import time
+
 from config import config
 
 
 class Amari_logger:
 
-    db_timeout = config['db_connect_timeout']
-    db_retries = config['db_connect_retries']
-    number_of_buffer = config['number_of_buffer']
-
-    data_pool = []
-    is_sending = False
     is_send_to_db = True
 
-    log_folder = Path.cwd().joinpath('logs')
-    send_fail_file = log_folder.joinpath('send_fail')
-
+    # check if python influx module installed
     try:
         from influxdb import InfluxDBClient
     except ModuleNotFoundError:
         print('\n==> module influxdb is not found, send to db function is disabled.')
+        time.sleep(3)
         is_send_to_db = False
 
+    # check if credential exists
     try:
         from credential import db_config
         influxdb_ip = db_config['influxdb_ip']
@@ -33,13 +30,28 @@ class Amari_logger:
         influxdb_dbname = db_config['influxdb_dbname']
     except (NameError, ImportError, KeyError) as e:
         print('\n==> credential.py is not found or db_config format incorrect, send to db function is disabled.')
+        time.sleep(3)
         is_send_to_db = False
 
+
     def __init__(self):
+
+        self.log_folder = Path.cwd().joinpath('logs')
         if not self.log_folder.exists():
             self.log_folder.mkdir()
+
+        self.send_fail_file = self.log_folder.joinpath('send_fail')
+
+        self.db_timeout = config['db_connect_timeout']
+        self.db_retries = config['db_connect_retries']
+        self.number_of_buffer = config['number_of_buffer']
+
+        self.data_pool = []
+        self.is_sending = False
+
         if self.is_send_to_db:
-            print(f'\n==> database used in influxdb: {self.influxdb_dbname}\n')
+            print(f'\n==> database used in influxdb: {self.influxdb_dbname}')
+            time.sleep(3)
 
     def write_to_file(self):
         with open(self.log_file, 'a') as f:
@@ -115,9 +127,9 @@ class Amari_logger:
             with open(file, 'r') as f:
                 string_data_list = f.readlines()
         except UnicodeDecodeError as e:
-                print(f'==> \tskipping file {file}:')
-                print(f'==> \t\t{e.__class__}, {e}')
-                return []
+            print(f'==> \tskipping file {file}:')
+            print(f'==> \t\t{e.__class__}, {e}')
+            return []
 
         data_list = []
         for nol, line in enumerate(string_data_list, start=1):
