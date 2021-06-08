@@ -8,14 +8,17 @@ from time import sleep
 from datetime import datetime
 from copy import copy
 from amari_logger import Amari_logger
+import argparse
 
 
 class Ping_logger(Amari_logger):
 
-    def __init__(self, ip, tos):
+    def __init__(self, ip, tos, exec_secs):
         super().__init__()
         self.ip = ip
         self.tos = tos
+        self.exec_secs = exec_secs
+        self.warning_cap = 40
 
         self.log_file = self.log_folder.joinpath(
             f'log_ping_{datetime.now().date()}')
@@ -33,8 +36,14 @@ class Ping_logger(Amari_logger):
         elif self.platform == 'Linux':
             tos_option_string = '-Q'
 
+        exec_secs_string = f' -t {self.exec_secs}' if self.exec_secs else ''
+        # if self.exec_secs:
+        #     exec_secs_string = f' -t {self.exec_secs}'
+        # else:
+        #     exec_secs_string = ''
+
         process = subprocess.Popen(shlex.split(
-            f'ping {self.ip} {tos_option_string} {self.tos}'), stdout=subprocess.PIPE)
+            f'ping {self.ip} {tos_option_string} {self.tos}{exec_secs_string}'), stdout=subprocess.PIPE)
 
         while True:
             output = process.stdout.readline()
@@ -57,23 +66,30 @@ class Ping_logger(Amari_logger):
                         'fields': {'RTT': latency}
                     }
                     self.logging_with_buffer(data)
+                    
+                    if latency > self.warning_cap:
+                        msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\ngot a RTT from {self.ip} greater than {self.warning_cap} ms.\nvalue: {latency} ms'
+                        self.send_line_notify('anest', msg)
 
                 except (ValueError, IndexError):
                     pass
                 except Exception as e:
                     print(f'==> error: {e.__class__} {e}')
 
+        self.clean_buffer_and_send()
 
 if __name__ == '__main__':
-    try:
-        ip = sys.argv[1]
-        tos = sys.argv[2]
-    except:
-        print('==> arg wrong, should be:\n python3 ping_log.py <ip> <tos>')
-        sys.exit(1)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-c', '--host', required=True,
+                        type=str, help='destination ip')
+    parser.add_argument('-Q', '--tos', default=0, type=int,
+                        help='type of service value')
+    parser.add_argument('-t', '--exec_secs', default=0, type=int,
+                        help='time duration (secs)')
+    args = parser.parse_args()
 
-    logger = Ping_logger(ip, tos)
-    print(f'==> start pinging : {ip}, tos: {tos}\n')
+    logger = Ping_logger(args.host, args.tos, args.exec_secs)
+    print(f'==> start pinging : {args.host}, tos: {args.tos}, duration: {args.exec_secs} secs\n')
 
     try:
         logger.run()

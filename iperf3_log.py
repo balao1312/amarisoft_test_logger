@@ -92,7 +92,7 @@ if __name__ == '__main__':
     parser.add_argument('-b', '--bitrate', default=0,
                         type=str, help='the limit of bitrate(M/K)')
     parser.add_argument('-t', '--exec_secs', default=0,
-                        help='reverse to downlink from iperf server')
+                        help='time duration (secs)')
     parser.add_argument('-l', '--buffer_length', default=999,
                         help='length of buffer to read or write (default 128 KB for TCP, 8KB for UDP)')
 
