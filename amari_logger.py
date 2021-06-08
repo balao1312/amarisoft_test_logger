@@ -4,6 +4,7 @@ import threading
 import pickle
 import json
 import time
+import requests
 
 from config import config
 
@@ -52,6 +53,25 @@ class Amari_logger:
         if self.is_send_to_db:
             print(f'\n==> database used in influxdb: {self.influxdb_dbname}')
             time.sleep(3)
+
+    def send_line_notify(self, dst, msg):
+        def lineNotifyMessage(line_token, msg):
+            line_headers = {
+                "Authorization": "Bearer " + line_token,
+                "Content-Type": "application/x-www-form-urlencoded"
+            }
+
+            payload = {'message': msg}
+            r = requests.post("https://notify-api.line.me/api/notify",
+                            headers=line_headers, params=payload)
+            return r.status_code
+        
+        if dst == 'myself':
+            token = '2unn268Rs1CkJ5JWGApbmwCPEB9qwSldVV5NNmukbFo'       # my own
+        elif dst == 'anest':
+            token = 'xrAUKB7KDmFh0CC97D1hgMl7NDNRimXK9GDF7SJOTFw'       # Anest
+
+        lineNotifyMessage(token, msg)
 
     def write_to_file(self):
         with open(self.log_file, 'a') as f:

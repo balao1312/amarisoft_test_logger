@@ -17,23 +17,11 @@ class Ping_logger(Amari_logger):
         super().__init__()
         self.ip = ip
         self.tos = tos
-        self.line_token = 'xrAUKB7KDmFh0CC97D1hgMl7NDNRimXK9GDF7SJOTFw'       # Anest
         self.RTT_warn_cap = 40
 
         self.log_file = self.log_folder.joinpath(
             f'log_ping_{datetime.now().date()}')
     
-    def lineNotifyMessage(self, line_token, msg):
-        line_headers = {
-            "Authorization": "Bearer " + line_token,
-            "Content-Type": "application/x-www-form-urlencoded"
-        }
-
-        payload = {'message': msg}
-        r = requests.post("https://notify-api.line.me/api/notify",
-                        headers=line_headers, params=payload)
-        return r.status_code
-
     @property
     def platform(self):
         cmd = 'uname'
@@ -74,7 +62,7 @@ class Ping_logger(Amari_logger):
                 
                     if latency > self.RTT_warn_cap:
                         msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\ngot a RTT from {self.ip} greater than {self.RTT_warn_cap} ms.\nvalue: {latency} ms'
-                        self.lineNotifyMessage(self.line_token, msg)
+                        self.send_line_notify('anest', msg)
 
                 except (ValueError, IndexError):
                     pass
