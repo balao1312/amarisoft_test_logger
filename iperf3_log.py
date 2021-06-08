@@ -47,7 +47,7 @@ class Iperf3_logger(Amari_logger):
             output = process.stdout.readline()
             if process.poll() is not None:
                 print()
-                self.clean_buffer()
+                self.clean_buffer_and_send()
                 break
 
             if output:
@@ -109,7 +109,7 @@ if __name__ == '__main__':
         logger.run()
     except KeyboardInterrupt:
         print('\n==> Interrupted.\n')
-        logger.clean_buffer()
+        logger.clean_buffer_and_send()
         sleep(0.1)
         max_sec_count = logger.db_retries * logger.db_timeout
         countdown = copy(max_sec_count)

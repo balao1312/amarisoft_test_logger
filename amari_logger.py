@@ -137,7 +137,7 @@ class Amari_logger:
             self.data_landing()
             self.data_pool = []
 
-    def clean_buffer(self):
+    def clean_buffer_and_send(self):
         if self.data_pool:
             self.data_landing()
 
