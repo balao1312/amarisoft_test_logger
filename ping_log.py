@@ -33,10 +33,10 @@ class Ping_logger(Amari_logger):
     def run(self):
         if self.platform == 'Darwin':
             tos_option_string = '-z'
+            exec_secs_string = f' -t {self.exec_secs}' if self.exec_secs else ''
         elif self.platform == 'Linux':
             tos_option_string = '-Q'
-
-        exec_secs_string = f' -t {self.exec_secs}' if self.exec_secs else ''
+            exec_secs_string = f' -c {self.exec_secs}' if self.exec_secs else ''
 
         process = subprocess.Popen(shlex.split(
             f'ping {self.ip} {tos_option_string} {self.tos}{exec_secs_string}'), stdout=subprocess.PIPE)
