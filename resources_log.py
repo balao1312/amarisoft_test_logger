@@ -16,8 +16,8 @@ class Resources_logger(Amari_logger):
     def __init__(self):
         super().__init__()
         self.number_of_buffer = 1
-        self.cpu_load_warning_cap = 4       # percentage
-        self.mem_usage_warning_cap = 50     # percentage
+        self.cpu_load_warning_cap = 4.0
+        self.mem_usage_warning_cap = 50.0     # percentage
         self.log_file = self.log_folder.joinpath(
             f'log_resources_{datetime.datetime.now().date()}')
 
