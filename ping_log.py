@@ -37,14 +37,11 @@ class Ping_logger(Amari_logger):
             tos_option_string = '-Q'
 
         exec_secs_string = f' -t {self.exec_secs}' if self.exec_secs else ''
-        # if self.exec_secs:
-        #     exec_secs_string = f' -t {self.exec_secs}'
-        # else:
-        #     exec_secs_string = ''
 
         process = subprocess.Popen(shlex.split(
             f'ping {self.ip} {tos_option_string} {self.tos}{exec_secs_string}'), stdout=subprocess.PIPE)
 
+        count = 0
         while True:
             output = process.stdout.readline()
             if process.poll() is not None:
@@ -56,6 +53,7 @@ class Ping_logger(Amari_logger):
                 try:
                     latency = float(
                         list(filter(None, line.split(' ')))[6][5:10])
+                    count += 1
                     print(
                         f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, dst:{self.ip}, tos: {self.tos}, latency: {latency} ms')
 
@@ -68,7 +66,7 @@ class Ping_logger(Amari_logger):
                     self.logging_with_buffer(data)
                     
                     if latency > self.warning_cap:
-                        msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\ngot a RTT from {self.ip} greater than {self.warning_cap} ms.\nvalue: {latency} ms'
+                        msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\ngot a RTT from {self.ip} greater than {self.warning_cap} ms.\nvalue: {latency} ms.\nSeq: {count}'
                         self.send_line_notify('anest', msg)
 
                 except (ValueError, IndexError):
