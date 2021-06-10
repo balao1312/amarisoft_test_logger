@@ -7,7 +7,6 @@ from amari_logger import Amari_logger
 
 class Resources_logger(Amari_logger):
 
-    number_of_buffer = 1
     try:
         from config import config
         device = config['resouces_device']
@@ -16,11 +15,11 @@ class Resources_logger(Amari_logger):
 
     def __init__(self):
         super().__init__()
+        self.number_of_buffer = 1
         self.log_file = self.log_folder.joinpath(
             f'log_resources_{datetime.datetime.now().date()}')
     
-    @property
-    def cpu_usage(self):
+    def get_cpu_usage(self):
         cmd = 'uptime'
         result = subprocess.check_output(
             [cmd], stderr=subprocess.STDOUT).decode('utf8')
@@ -32,8 +31,7 @@ class Resources_logger(Amari_logger):
         }
         return cpu_load
 
-    @property
-    def mem_usage(self):
+    def get_mem_usage(self):
         cmd = 'free'
         result = subprocess.check_output(
             [cmd], timeout=3, stderr=subprocess.STDOUT).decode('utf8')
@@ -49,8 +47,7 @@ class Resources_logger(Amari_logger):
         }
         return mem_status
 
-    @property
-    def swap_usage(self):
+    def get_swap_usage(self):
         cmd = 'free'
         result = subprocess.check_output(
             [cmd], timeout=3, stderr=subprocess.STDOUT).decode('utf8')
@@ -75,8 +72,7 @@ class Resources_logger(Amari_logger):
         }
         return swap_status
 
-    @property
-    def disk_usage(self):
+    def get_disk_usage(self):
         cmd = 'df -h'
         result = subprocess.check_output(
             [cmd], timeout=3, shell=True, stderr=subprocess.STDOUT).decode('utf8')
@@ -89,8 +85,7 @@ class Resources_logger(Amari_logger):
         }
         return storage_status
 
-    @property
-    def cpu_temp(self):
+    def get_cpu_temp(self):
         cmd = 'cat /etc/os-release'
         result = subprocess.check_output(
             [cmd], timeout=3, shell=True, stderr=subprocess.STDOUT).decode('utf8')
@@ -101,7 +96,7 @@ class Resources_logger(Amari_logger):
                     [cmd], timeout=3, shell=True, stderr=subprocess.STDOUT).decode('utf8')
                 # print(result)
                 temp = result[5:9]
-                return temp if temp else 0
+                return temp
             except Exception as e:
                 print("==> couldn't get temp information")
                 print('==> error msg: ', e)
@@ -113,7 +108,7 @@ class Resources_logger(Amari_logger):
                 [cmd], timeout=3, shell=True, stderr=subprocess.STDOUT).decode('utf8')
             # print(result)
             temp = result.split('\n')[2][16:20]
-            return temp if temp else 0
+            return temp
         except Exception as e:
             print("==> couldn't get temp information")
             print('==> error msg: ', e)
@@ -121,16 +116,24 @@ class Resources_logger(Amari_logger):
 
     def run(self):
         record_time = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        cpu_1m = self.get_cpu_usage()['1m']
+        mem_usage = self.get_mem_usage()['usage']
+        mem_total = self.get_mem_usage()['total']
+        swap_usage = self.get_swap_usage()['usage']
+        swap_total = self.get_swap_usage()['total']
+        storage_usage = self.get_disk_usage()['usage']
+        storage_total = self.get_disk_usage()['total']
+        temperature = self.get_cpu_temp()
         output = f'''
             {record_time}
-            cpu_1m: \t\t{self.cpu_usage['1m']}
-            mem_usage: \t\t{self.mem_usage['usage']}%
-            mem_total: \t\t{self.mem_usage['total']}G
-            swap_usage: \t{self.swap_usage['usage']}%
-            swap_total: \t{self.swap_usage['total']}G
-            storage_usage: \t{self.disk_usage['usage']}
-            storage_total: \t{self.disk_usage['total']}
-            temperature: \t{self.cpu_temp}
+            cpu_1m: \t\t{cpu_1m}
+            mem_usage: \t\t{mem_usage} %
+            mem_total: \t\t{mem_total} G
+            swap_usage: \t{swap_usage} %
+            swap_total: \t{swap_total} G
+            storage_usage: \t{storage_usage} %
+            storage_total: \t{storage_total} G
+            temperature: \t{temperature} c
             '''
         print(output)
         print(f'==> device to tag in db: {self.device}')
@@ -140,12 +143,20 @@ class Resources_logger(Amari_logger):
             'tags': {'device': self.device},
             'time': record_time,
             'fields': {
-                'cpu_usage': float(self.cpu_usage['1m']),
-                'mem_usage': float(self.mem_usage['usage']),
-                'temp': float(self.cpu_temp),
+                'cpu_usage': float(cpu_1m),
+                'mem_usage': float(mem_usage),
+                'temp': float(temperature),
             }
         }
         self.logging_with_buffer(data)
+        
+        if  float(cpu_1m)> 4:
+            msg = f'{datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\nAnest amarisoft base station CPU load is greater than 4.0.'
+            self.send_line_notify('anest', msg)
+
+        if  float(mem_usage) > 50:
+            msg = f'{datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\nAnest amarisoft base station memory usage is greater than 50%.'
+            self.send_line_notify('anest', msg)
 
 
 if __name__ == '__main__':
