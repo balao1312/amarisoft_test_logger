@@ -16,9 +16,11 @@ class Resources_logger(Amari_logger):
     def __init__(self):
         super().__init__()
         self.number_of_buffer = 1
+        self.cpu_load_warning_cap = 4       # percentage
+        self.mem_usage_warning_cap = 50     # percentage
         self.log_file = self.log_folder.joinpath(
             f'log_resources_{datetime.datetime.now().date()}')
-    
+
     def get_cpu_usage(self):
         cmd = 'uptime'
         result = subprocess.check_output(
@@ -63,7 +65,7 @@ class Resources_logger(Amari_logger):
             }
 
             return swap_status
-        
+
         swap_usage = round(((1-int(swap_available) / int(swap_total)))*100, 1)
         swap_total_G = round((int(swap_total) / 1024 / 1024), 1)
         swap_status = {
@@ -149,13 +151,13 @@ class Resources_logger(Amari_logger):
             }
         }
         self.logging_with_buffer(data)
-        
-        if  float(cpu_1m)> 4:
-            msg = f'{datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\nAnest amarisoft base station CPU load is greater than 4.0.'
+
+        if float(cpu_1m) > self.cpu_load_warning_cap:
+            msg = f'{datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\nAnest amarisoft base station CPU load is greater than {self.cpu_load_warning_cap}.'
             self.send_line_notify('anest', msg)
 
-        if  float(mem_usage) > 50:
-            msg = f'{datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\nAnest amarisoft base station memory usage is greater than 50%.'
+        if float(mem_usage) > self.mem_usage_warning_cap:
+            msg = f'{datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\nAnest amarisoft base station memory usage is greater than {self.mem_usage_warning_cap} %.'
             self.send_line_notify('anest', msg)
 
 
