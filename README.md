@@ -15,12 +15,13 @@ Result will be log to plain text file and send to database periodically.
 
 * ### ping
 	Test connection latency.  
-	Syntax : `python3 ping_log.py (destination ip) (tos)`  
+	Syntax : `python3 ping_log.py -c host -Q tos -t secs`  
 	Example:
 	
 	```
-	$ python3 ping_log.py 8.8.8.8 4
+	$ python3 ping_log.py -c 8.8.8.8 -Q 4 -t 60
 	```
+	For futher infomation you can  `$ python3 ping_log.py --help` 
 	
 * ### iperf  
 	Test connection thoughtput.  
