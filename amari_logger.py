@@ -34,7 +34,6 @@ class Amari_logger:
         time.sleep(3)
         is_send_to_db = False
 
-
     def __init__(self):
 
         self.log_folder = Path.cwd().joinpath('logs')
@@ -63,9 +62,9 @@ class Amari_logger:
 
             payload = {'message': msg}
             r = requests.post("https://notify-api.line.me/api/notify",
-                            headers=line_headers, params=payload)
+                              headers=line_headers, params=payload)
             return r.status_code
-        
+
         if dst == 'myself':
             token = '2unn268Rs1CkJ5JWGApbmwCPEB9qwSldVV5NNmukbFo'       # my own
         elif dst == 'anest':

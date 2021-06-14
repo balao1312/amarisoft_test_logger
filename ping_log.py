@@ -64,7 +64,7 @@ class Ping_logger(Amari_logger):
                         'fields': {'RTT': latency}
                     }
                     self.logging_with_buffer(data)
-                    
+
                     if latency > self.warning_cap:
                         msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\ngot a RTT from {self.ip} greater than {self.warning_cap} ms.\nvalue: {latency} ms.\nSeq: {count}'
                         self.send_line_notify('anest', msg)
@@ -75,6 +75,7 @@ class Ping_logger(Amari_logger):
                     print(f'==> error: {e.__class__} {e}')
 
         self.clean_buffer_and_send()
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -87,14 +88,15 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     logger = Ping_logger(args.host, args.tos, args.exec_secs)
-    print(f'==> start pinging : {args.host}, tos: {args.tos}, duration: {args.exec_secs} secs\n')
+    print(
+        f'==> start pinging : {args.host}, tos: {args.tos}, duration: {args.exec_secs} secs\n')
 
     try:
         logger.run()
     except KeyboardInterrupt:
         print('\n==> Interrupted.\n')
         logger.clean_buffer_and_send()
-        sleep(0.1) 
+        sleep(0.1)
         max_sec_count = logger.db_retries * logger.db_timeout
         countdown = copy(max_sec_count)
         while logger.is_sending:

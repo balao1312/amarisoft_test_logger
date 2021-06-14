@@ -107,9 +107,8 @@ class ros2_logger(Amari_logger):
                         'tags': {'column': tag},
                         'time': time_string,
                         'fields': {each: 1}
-                    }                   
+                    }
                     data_pool.append(data)
-
 
                 data = {
                     'measurement': 'ros2_log',
@@ -118,7 +117,7 @@ class ros2_logger(Amari_logger):
                     'fields': {f'{tag}_alive': string_to_send}
                 }
                 data_pool.append(data)
-                
+
                 for each in data_pool:
                     self.logging_with_buffer(each)
 

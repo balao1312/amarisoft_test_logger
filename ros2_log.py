@@ -22,7 +22,7 @@ class ros2_logger(Amari_logger):
     last_value = {}
     notify_msg = ''
     last_value_2_before = {}
-    token = 'xrAUKB7KDmFh0CC97D1hgMl7NDNRimXK9GDF7SJOTFw' # anest line group
+    token = 'xrAUKB7KDmFh0CC97D1hgMl7NDNRimXK9GDF7SJOTFw'  # anest line group
     # token = '2unn268Rs1CkJ5JWGApbmwCPEB9qwSldVV5NNmukbFo' # balao test
 
     def __init__(self):
@@ -52,7 +52,7 @@ class ros2_logger(Amari_logger):
             if each not in now:
                 text += f'{each} is now down\n'
         return text
-    
+
     def check_if_status_changed(self, tag, value):
         if tag not in self.last_value:
             return
@@ -69,7 +69,7 @@ class ros2_logger(Amari_logger):
                 print('==> notify sent.')
             except Exception as e:
                 print(f'==> send line notify error: {e.__class__}, \n{e}')
-            
+
             del self.last_value_2_before[tag]
             del self.last_value[tag]
             return

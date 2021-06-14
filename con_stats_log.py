@@ -67,7 +67,7 @@ class Con_stats_logger(Amari_logger):
                     'ta': columns[19][:-1],
                 }
             }
-            
+
             try:
                 dl_mcs = float(stats_data['DL']['mcs'])
                 ul_mcs = float(stats_data['UL']['mcs'])
