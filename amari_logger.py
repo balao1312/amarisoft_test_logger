@@ -19,7 +19,7 @@ class Amari_logger:
         from influxdb import InfluxDBClient
     except ModuleNotFoundError:
         print('\n==> module influxdb is not found, send to db function is disabled.')
-        time.sleep(3)
+        time.sleep(2)
         is_send_to_db = False
 
     # check if credential exists
@@ -30,9 +30,10 @@ class Amari_logger:
         influxdb_username = db_config['influxdb_username']
         influxdb_password = db_config['influxdb_password']
         influxdb_dbname = db_config['influxdb_dbname']
+        line_notify_token = db_config['line_notify_token']
     except (NameError, ImportError, KeyError) as e:
         print('\n==> credential.py is not found or db_config format incorrect, send to db function is disabled.')
-        time.sleep(3)
+        time.sleep(2)
         is_send_to_db = False
 
     def __init__(self):
@@ -66,10 +67,7 @@ class Amari_logger:
                               headers=line_headers, params=payload)
             return r.status_code
 
-        if dst == 'balao':
-            token = '2unn268Rs1CkJ5JWGApbmwCPEB9qwSldVV5NNmukbFo'       # my own
-        elif dst == 'anest':
-            token = 'xrAUKB7KDmFh0CC97D1hgMl7NDNRimXK9GDF7SJOTFw'       # Anest
+        token = self.line_notify_token[dst]
 
         print('==> trying send notify ...')
         try:
