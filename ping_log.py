@@ -9,16 +9,17 @@ from datetime import datetime
 from copy import copy
 from amari_logger import Amari_logger
 import argparse
+import threading
 
 
 class Ping_logger(Amari_logger):
 
-    def __init__(self, ip, tos, exec_secs):
+    def __init__(self, ip, tos, exec_secs, notify_cap):
         super().__init__()
         self.ip = ip
         self.tos = tos
         self.exec_secs = exec_secs
-        self.warning_cap = 40
+        self.notify_cap = notify_cap
 
         self.log_file = self.log_folder.joinpath(
             f'log_ping_{datetime.now().date()}')
@@ -38,8 +39,9 @@ class Ping_logger(Amari_logger):
             tos_option_string = '-Q'
             exec_secs_string = f' -c {self.exec_secs}' if self.exec_secs else ''
 
-        process = subprocess.Popen(shlex.split(
-            f'ping {self.ip} {tos_option_string} {self.tos}{exec_secs_string}'), stdout=subprocess.PIPE)
+        cmd = f'ping {self.ip} {tos_option_string} {self.tos}{exec_secs_string}'
+        print(f'==> cmd send: {cmd}\n')
+        process = subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE)
 
         count = 0
         while True:
@@ -65,9 +67,12 @@ class Ping_logger(Amari_logger):
                     }
                     self.logging_with_buffer(data)
 
-                    if latency > self.warning_cap:
-                        msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\ngot a RTT from {self.ip} greater than {self.warning_cap} ms.\nvalue: {latency} ms.\nSeq: {count}'
-                        self.send_line_notify('anest', msg)
+                    if self.notify_cap and latency > self.notify_cap:
+                        msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\ngot a RTT from {self.ip} greater than {self.notify_cap} ms.\nvalue: {latency} ms.\nSeq: {count}'
+                        thread_1 = threading.Thread(
+                            target=self.send_line_notify, args=('balao', msg))
+                        thread_1.start()
+                        # self.send_line_notify('balao', msg)
 
                 except (ValueError, IndexError):
                     pass
@@ -85,9 +90,11 @@ if __name__ == '__main__':
                         help='type of service value')
     parser.add_argument('-t', '--exec_secs', default=0, type=int,
                         help='time duration (secs)')
+    parser.add_argument('-n', '--notify_cap', default=0, type=int,
+                        help='latency value cap to notify (millisecs)')
     args = parser.parse_args()
 
-    logger = Ping_logger(args.host, args.tos, args.exec_secs)
+    logger = Ping_logger(args.host, args.tos, args.exec_secs, args.notify_cap)
     print(
         f'==> start pinging : {args.host}, tos: {args.tos}, duration: {args.exec_secs} secs\n')
 

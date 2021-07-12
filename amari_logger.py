@@ -5,6 +5,7 @@ import pickle
 import json
 import time
 import requests
+import sys
 
 from config import config
 
@@ -65,12 +66,17 @@ class Amari_logger:
                               headers=line_headers, params=payload)
             return r.status_code
 
-        if dst == 'myself':
+        if dst == 'balao':
             token = '2unn268Rs1CkJ5JWGApbmwCPEB9qwSldVV5NNmukbFo'       # my own
         elif dst == 'anest':
             token = 'xrAUKB7KDmFh0CC97D1hgMl7NDNRimXK9GDF7SJOTFw'       # Anest
 
-        lineNotifyMessage(token, msg)
+        print('==> trying send notify ...')
+        try:
+            lineNotifyMessage(token, msg)
+            print('==> notify sent.')
+        except Exception as e:
+            print(f'==> func: {sys._getframe().f_code.co_name} error: {e.__class__} {e}')
 
     def write_to_file(self):
         with open(self.log_file, 'a') as f:
