@@ -53,7 +53,7 @@ class Amari_logger:
 
         if self.is_send_to_db:
             print(f'\n==> database used in influxdb: {self.influxdb_dbname}')
-            time.sleep(3)
+            time.sleep(2)
 
     def send_line_notify(self, dst, msg):
         def lineNotifyMessage(line_token, msg):

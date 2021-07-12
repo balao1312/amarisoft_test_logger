@@ -91,15 +91,15 @@ if __name__ == '__main__':
                         help='type of service value')
     parser.add_argument('-b', '--bitrate', default=0,
                         type=str, help='the limit of bitrate(M/K)')
-    parser.add_argument('-t', '--exec_secs', default=0,
+    parser.add_argument('-t', '--exec_secs', default=0, type=int,
                         help='time duration (secs)')
-    parser.add_argument('-l', '--buffer_length', default=999,
+    parser.add_argument('-l', '--buffer_length', default=128, type=int,
                         help='length of buffer to read or write (default 128 KB for TCP, 8KB for UDP)')
 
     parser.add_argument('-u', '--udp', action="store_true",
-                        help='reverse to downlink from iperf server')
+                        help='use udp instead of tcp.')
     parser.add_argument('-R', '--reverse', action="store_true",
-                        help='reverse to downlink from iperf server')
+                        help='reverse to downlink from server')
     args = parser.parse_args()
 
     logger = Iperf3_logger(host=args.host, port=args.port, tos=args.tos,
