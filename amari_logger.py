@@ -76,7 +76,8 @@ class Amari_logger:
             lineNotifyMessage(token, msg)
             print('==> notify sent.')
         except Exception as e:
-            print(f'==> func: {sys._getframe().f_code.co_name} error: {e.__class__} {e}')
+            print(
+                f'==> func: {sys._getframe().f_code.co_name} error: {e.__class__} {e}')
 
     def write_to_file(self):
         with open(self.log_file, 'a') as f:

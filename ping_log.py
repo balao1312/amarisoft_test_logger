@@ -72,7 +72,6 @@ class Ping_logger(Amari_logger):
                         thread_1 = threading.Thread(
                             target=self.send_line_notify, args=('balao', msg))
                         thread_1.start()
-                        # self.send_line_notify('balao', msg)
 
                 except (ValueError, IndexError):
                     pass
