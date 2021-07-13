@@ -10,6 +10,7 @@ from copy import copy
 from amari_logger import Amari_logger
 import argparse
 import re
+import pexpect
 
 
 class Iperf3_logger(Amari_logger):
@@ -38,47 +39,45 @@ class Iperf3_logger(Amari_logger):
 
         average_pattern = re.compile('.*(sender|receiver)')
 
-        cmd = f'iperf3 -c {self.host} -p {self.port} -S {self.tos} -b {self.bitrate} -t {self.exec_secs}{buffer_length_string}{reverse_string}{udp_string} -f m --forceflush'
+        cmd = f'iperf3 -c {self.host} -p {self.port} -S {self.tos} -b {self.bitrate} -t {self.exec_secs}{buffer_length_string}{reverse_string}{udp_string} -f m'
         print(f'==> cmd send: \n\n\t{cmd}\n')
 
-        process = subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE)
+        child = pexpect.spawnu(cmd, timeout=10)
 
         while True:
-            output = process.stdout.readline()
-            if process.poll() is not None:
-                print()
-                self.clean_buffer_and_send()
-                break
-
-            if output:
-                line = output.strip().decode('utf8')
+            try:
+                child.expect('\n')
+                line = child.before
                 record_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-                try:
-                    mbps = float(list(filter(None, line.split(' ')))[6])
-                    self.record_count += 1
-                    self.total_mbps += mbps
+                mbps = float(list(filter(None, line.split(' ')))[6])
+                self.record_count += 1
+                self.total_mbps += mbps
 
-                    if average_pattern.match(line):
-                        print('-' * 80)
-                        print(average_pattern.search(line).group(0))
-                        continue
+                if average_pattern.match(line):
+                    print('-' * 80)
+                    print(average_pattern.search(line).group(0))
+                    continue
 
-                    print(
-                        f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, dst:{self.host}, tos:{self.tos}, bitrate: {mbps} Mbit/s')
+                print(
+                    f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, dst:{self.host}, tos:{self.tos}, bitrate: {mbps} Mbit/s')
 
-                    data = {
-                        'measurement': 'iperf3',
-                        'tags': {'tos': self.tos},
-                        'time': record_time,
-                        'fields': {'Mbps': mbps}
-                    }
+                data = {
+                    'measurement': 'iperf3',
+                    'tags': {'tos': self.tos},
+                    'time': record_time,
+                    'fields': {'Mbps': mbps}
+                }
 
-                    self.logging_with_buffer(data)
+                self.logging_with_buffer(data)
 
-                except (ValueError, IndexError):
-                    pass
-                except Exception as e:
-                    print(f'==> error: {e.__class__} {e}')
+            except pexpect.exceptions.EOF:
+                break
+            except (ValueError, IndexError):
+                pass
+            except Exception as e:
+                print(f'==> error: {e.__class__} {e}')
+        
+        self.clean_buffer_and_send()
 
 
 if __name__ == '__main__':
