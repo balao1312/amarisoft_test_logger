@@ -38,7 +38,7 @@ class Amari_logger:
     try:
         line_notify_token = db_config['line_notify_token']
     except (NameError, ImportError, KeyError) as e:
-        print('line notify token is not found.')
+        print('\n==> Line notify token is not found in credential.py, notify function is disabled.')
         time.sleep(2)
 
     def __init__(self):
@@ -71,6 +71,9 @@ class Amari_logger:
             r = requests.post("https://notify-api.line.me/api/notify",
                               headers=line_headers, params=payload)
             return r.status_code
+
+        if not self.line_notify_token:
+            return
 
         token = self.line_notify_token[dst]
 

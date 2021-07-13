@@ -154,11 +154,11 @@ class Resources_logger(Amari_logger):
 
         if float(cpu_1m) > self.cpu_load_warning_cap:
             msg = f'{datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\nAnest amarisoft base station CPU load is greater than {self.cpu_load_warning_cap}.'
-            self.send_line_notify('anest', msg)
+            self.send_line_notify('balao', msg)
 
         if float(mem_usage) > self.mem_usage_warning_cap:
             msg = f'{datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\nAnest amarisoft base station memory usage is greater than {self.mem_usage_warning_cap} %.'
-            self.send_line_notify('anest', msg)
+            self.send_line_notify('balao', msg)
 
 
 if __name__ == '__main__':
