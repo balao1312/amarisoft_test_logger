@@ -1,7 +1,5 @@
 #!/usr/bin/python3
 
-import subprocess
-import shlex
 import sys
 import os
 from time import sleep
