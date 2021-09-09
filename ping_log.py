@@ -14,12 +14,13 @@ import threading
 
 class Ping_logger(Amari_logger):
 
-    def __init__(self, ip, tos, exec_secs, notify_cap):
+    def __init__(self, ip, tos, exec_secs, notify_cap, interval):
         super().__init__()
         self.ip = ip
         self.tos = tos
         self.exec_secs = exec_secs
         self.notify_cap = notify_cap
+        self.interval = interval
 
         self.log_file = self.log_folder.joinpath(
             f'log_ping_{datetime.now().date()}')
@@ -39,7 +40,9 @@ class Ping_logger(Amari_logger):
             tos_option_string = '-Q'
             exec_secs_string = f' -c {self.exec_secs}' if self.exec_secs else ''
 
-        cmd = f'ping {self.ip} {tos_option_string} {self.tos}{exec_secs_string}'
+        interval_string = f' -i {self.interval}'
+
+        cmd = f'ping {self.ip} {tos_option_string} {self.tos}{exec_secs_string}{interval_string}'
         print(f'==> cmd send: {cmd}\n')
         process = subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE)
 
@@ -91,9 +94,12 @@ if __name__ == '__main__':
                         help='time duration (secs)')
     parser.add_argument('-n', '--notify_cap', default=0, type=int,
                         help='latency value cap to notify (millisecs)')
+    parser.add_argument('-i', '--interval', default=1, type=float,
+                        help='interval between packets')
     args = parser.parse_args()
 
-    logger = Ping_logger(args.host, args.tos, args.exec_secs, args.notify_cap)
+    logger = Ping_logger(args.host, args.tos, args.exec_secs,
+                         args.notify_cap, args.interval)
     print(
         f'==> start pinging : {args.host}, tos: {args.tos}, duration: {args.exec_secs} secs\n')
 
