@@ -74,7 +74,7 @@ class Iperf3_logger(Amari_logger):
                 pass
             except Exception as e:
                 print(f'==> error: {e.__class__} {e}')
-        
+
         self.clean_buffer_and_send()
 
 

@@ -1,5 +1,6 @@
 import argparse
 
+
 def create_ue_db(num=1, sim_algo="xor"):
     counter = 89
     output = ''
@@ -21,10 +22,11 @@ def create_ue_db(num=1, sim_algo="xor"):
     authent_type: "MD5",*/
 }},\n'''
         output += template
-        counter +=1
+        counter += 1
 
     with open('ue_db_created', 'w') as f:
         f.write(output)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
