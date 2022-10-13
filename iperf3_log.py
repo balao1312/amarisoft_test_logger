@@ -1,7 +1,5 @@
 #!/usr/bin/python3
 
-import subprocess
-import shlex
 import sys
 import os
 from time import sleep
@@ -10,11 +8,12 @@ from copy import copy
 from amari_logger import Amari_logger
 import argparse
 import re
+import pexpect
 
 
 class Iperf3_logger(Amari_logger):
 
-    def __init__(self, host, port, tos, bitrate, reverse, udp, exec_secs, buffer_length):
+    def __init__(self, host, port, tos, bitrate, reverse, udp, duration, buffer_length, window):
         super().__init__()
         self.host = host
         self.tos = tos
@@ -22,79 +21,88 @@ class Iperf3_logger(Amari_logger):
         self.bitrate = bitrate
         self.reverse = reverse
         self.udp = udp
-        self.exec_secs = exec_secs
+        self.duration = duration
         self.buffer_length = buffer_length
-
-        self.record_count = 0
-        self.total_mbps = 0
+        self.window = window
 
         self.log_file = self.log_folder.joinpath(
             f'log_iperf3_{datetime.now().date()}')
 
     def run(self):
+        tos_string = f' -S {self.tos}' if self.tos else ''
+        bitrate_string = f' -b {self.bitrate}' if self.bitrate else ''
+        buffer_length_string = f' -l {self.buffer_length}' if self.buffer_length else ''
+        window_string = f' -w {self.window}' if self.window else ''
+
         reverse_string = ' -R' if self.reverse else ''
         udp_string = ' -u' if self.udp else ''
-        buffer_length_string = f' -l {self.buffer_length}' if self.buffer_length else ''
 
         average_pattern = re.compile('.*(sender|receiver)')
 
-        cmd = f'iperf3 -c {self.host} -p {self.port} -S {self.tos} -b {self.bitrate} -t {self.exec_secs}{buffer_length_string}{reverse_string}{udp_string} -f m --forceflush'
+        cmd = f'iperf3 -c {self.host} -p {self.port} -t {self.duration} -f m'\
+            f'{tos_string}'\
+            f'{bitrate_string}'\
+            f'{buffer_length_string}'\
+            f'{window_string}'\
+            f'{reverse_string}'\
+            f'{udp_string}'
+
         print(f'==> cmd send: \n\n\t{cmd}\n')
+        sleep(1)
+        child = pexpect.spawnu(cmd, timeout=10)
 
-        process = subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE)
-
+        counter = 0
         while True:
-            output = process.stdout.readline()
-            if process.poll() is not None:
-                print()
-                self.clean_buffer_and_send()
-                break
-
-            if output:
-                line = output.strip().decode('utf8')
+            try:
+                child.expect('\n')
+                line = child.before
                 record_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-                try:
-                    mbps = float(list(filter(None, line.split(' ')))[6])
-                    self.record_count += 1
-                    self.total_mbps += mbps
+                mbps = float(list(filter(None, line.split(' ')))[6])
+                counter += 1
 
-                    if average_pattern.match(line):
-                        print('-' * 80)
-                        print(average_pattern.search(line).group(0))
-                        continue
+                # show summary
+                if average_pattern.match(line):
+                    print(average_pattern.search(line).group(0))
+                    continue
 
-                    print(
-                        f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, dst:{self.host}, tos:{self.tos}, bitrate: {mbps} Mbit/s')
+                print(
+                    f'{counter}: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, dst:{self.host}, tos:{self.tos}, bitrate: {mbps} Mbit/s')
 
-                    data = {
-                        'measurement': 'iperf3',
-                        'tags': {'tos': self.tos},
-                        'time': record_time,
-                        'fields': {'Mbps': mbps}
-                    }
+                data = {
+                    'measurement': 'iperf3',
+                    'tags': {'tos': self.tos},
+                    'time': record_time,
+                    'fields': {'Mbps': mbps}
+                }
 
-                    self.logging_with_buffer(data)
+                self.logging_with_buffer(data)
 
-                except (ValueError, IndexError):
-                    pass
-                except Exception as e:
-                    print(f'==> error: {e.__class__} {e}')
+            except pexpect.exceptions.EOF:
+                break
+            except (ValueError, IndexError):
+                pass
+            except Exception as e:
+                print(f'==> error: {e.__class__} {e}')
+
+        self.clean_buffer_and_send()
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--host', required=True,
-                        type=str, help='iperf server ip')
-    parser.add_argument('-p', '--port', default=5201,
-                        type=int, help='iperf server port')
-    parser.add_argument('-S', '--tos', default=0, type=int,
+    parser.add_argument('-c', '--host', metavar='', required=True, type=str,
+                        help='iperf server ip')
+    parser.add_argument('-p', '--port', metavar='', default=5201, type=int,
+                        help='iperf server port')
+    parser.add_argument('-S', '--tos', metavar='', default=0, type=int,
                         help='type of service value')
-    parser.add_argument('-b', '--bitrate', default=0,
-                        type=str, help='the limit of bitrate(M/K)')
-    parser.add_argument('-t', '--exec_secs', default=0, type=int,
+    parser.add_argument('-b', '--bitrate', metavar='', default=0, type=str,
+                        help='the limit of bitrate(M/K)')
+    parser.add_argument('-t', '--duration', metavar='', default=0, type=int,
                         help='time duration (secs)')
-    parser.add_argument('-l', '--buffer_length', default=128, type=int,
+    parser.add_argument('-l', '--buffer_length', metavar='', default=0, type=int,
                         help='length of buffer to read or write (default 128 KB for TCP, 8KB for UDP)')
+    parser.add_argument('-w', '--window', metavar='', default=0, type=str,
+                        help='set send/receive socket buffer sizes.(indirectly sets TCP window size)')
 
     parser.add_argument('-u', '--udp', action="store_true",
                         help='use udp instead of tcp.')
@@ -102,8 +110,17 @@ if __name__ == '__main__':
                         help='reverse to downlink from server')
     args = parser.parse_args()
 
-    logger = Iperf3_logger(host=args.host, port=args.port, tos=args.tos,
-                           bitrate=args.bitrate, reverse=args.reverse, udp=args.udp, exec_secs=args.exec_secs, buffer_length=args.buffer_length)
+    logger = Iperf3_logger(
+        host=args.host,
+        port=args.port,
+        tos=args.tos,
+        bitrate=args.bitrate,
+        reverse=args.reverse,
+        udp=args.udp,
+        duration=args.duration,
+        buffer_length=args.buffer_length,
+        window=args.window
+    )
 
     try:
         logger.run()
@@ -124,5 +141,5 @@ if __name__ == '__main__':
             sys.exit(0)
         except SystemExit:
             os._exit(0)
-    except Exception as e:
-        print(f'==> error: {e.__class__} {e}')
+    # except Exception as e:
+    #     print(f'==> error: {e.__class__} {e}')
