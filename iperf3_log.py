@@ -13,7 +13,7 @@ import pexpect
 
 class Iperf3_logger(Amari_logger):
 
-    def __init__(self, host, port, tos, bitrate, reverse, udp, duration, buffer_length, window, parallel):
+    def __init__(self, host, port, tos, bitrate, reverse, udp, duration, buffer_length, window, parallel, set_mss):
         super().__init__()
         self.host = host
         self.tos = tos
@@ -25,6 +25,7 @@ class Iperf3_logger(Amari_logger):
         self.buffer_length = buffer_length
         self.window = window
         self.parallel = parallel
+        self.set_mss = set_mss
 
         self.log_file = self.log_folder.joinpath(
             f'log_iperf3_{datetime.now().date()}')
@@ -36,6 +37,7 @@ class Iperf3_logger(Amari_logger):
         buffer_length_string = f' -l {self.buffer_length}' if self.buffer_length else ''
         window_string = f' -w {self.window}' if self.window else ''
         parallel_string = f' -P {self.parallel}' if self.parallel else ''
+        set_mss_string = f' -M {self.set_mss}' if self.set_mss else ''
 
         reverse_string = ' -R' if self.reverse else ''
         udp_string = ' -u' if self.udp else ''
@@ -46,6 +48,7 @@ class Iperf3_logger(Amari_logger):
             f'{buffer_length_string}'\
             f'{window_string}'\
             f'{parallel_string}'\
+            f'{set_mss_string}'\
             f'{reverse_string}'\
             f'{udp_string}'
 
@@ -95,7 +98,8 @@ class Iperf3_logger(Amari_logger):
 
                 self.logging_with_buffer(data)
 
-            except pexpect.exceptions.EOF:
+            except pexpect.exceptions.EOF as e:
+                print('==> got EOF, ended.')
                 break
             except (ValueError, IndexError):
                 pass
@@ -123,6 +127,8 @@ if __name__ == '__main__':
                         help='set send/receive socket buffer sizes.(indirectly sets TCP window size)')
     parser.add_argument('-P', '--parallel', metavar='', default=0, type=int,
                         help='number of parallel client streams to run')
+    parser.add_argument('-M', '--set-mss', metavar='', default=0, type=int,
+                        help='set TCP/SCTP maximum segment size (MTU - 40 bytes)')
 
     parser.add_argument('-u', '--udp', action="store_true",
                         help='use udp instead of tcp.')
@@ -140,7 +146,8 @@ if __name__ == '__main__':
         duration=args.duration,
         buffer_length=args.buffer_length,
         window=args.window,
-        parallel=args.parallel
+        parallel=args.parallel,
+        set_mss= args.set_mss
     )
 
     try:
