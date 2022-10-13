@@ -13,7 +13,7 @@ import pexpect
 
 class Iperf3_logger(Amari_logger):
 
-    def __init__(self, host, port, tos, bitrate, reverse, udp, duration, buffer_length, window):
+    def __init__(self, host, port, tos, bitrate, reverse, udp, duration, buffer_length, window, parallel):
         super().__init__()
         self.host = host
         self.tos = tos
@@ -24,41 +24,59 @@ class Iperf3_logger(Amari_logger):
         self.duration = duration
         self.buffer_length = buffer_length
         self.window = window
+        self.parallel = parallel
 
         self.log_file = self.log_folder.joinpath(
             f'log_iperf3_{datetime.now().date()}')
 
     def run(self):
+        # parse options to cmd string
         tos_string = f' -S {self.tos}' if self.tos else ''
         bitrate_string = f' -b {self.bitrate}' if self.bitrate else ''
         buffer_length_string = f' -l {self.buffer_length}' if self.buffer_length else ''
         window_string = f' -w {self.window}' if self.window else ''
+        parallel_string = f' -P {self.parallel}' if self.parallel else ''
 
         reverse_string = ' -R' if self.reverse else ''
         udp_string = ' -u' if self.udp else ''
-
-        average_pattern = re.compile('.*(sender|receiver)')
 
         cmd = f'iperf3 -c {self.host} -p {self.port} -t {self.duration} -f m'\
             f'{tos_string}'\
             f'{bitrate_string}'\
             f'{buffer_length_string}'\
             f'{window_string}'\
+            f'{parallel_string}'\
             f'{reverse_string}'\
             f'{udp_string}'
 
         print(f'==> cmd send: \n\n\t{cmd}\n')
         sleep(1)
+
+        average_pattern = re.compile(r'.*(sender|receiver)')
+        sum_parallel_pattern = re.compile(r'^\[SUM\].*\ ([0-9.]*)\ Mbits\/sec')
+
         child = pexpect.spawnu(cmd, timeout=10)
 
         counter = 0
+
         while True:
             try:
                 child.expect('\n')
                 line = child.before
                 record_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-                mbps = float(list(filter(None, line.split(' ')))[6])
-                counter += 1
+
+                # check if parallel number > 2
+                if self.parallel < 2:
+                    mbps = float(list(filter(None, line.split(' ')))[6])
+                    counter += 1
+                else:
+                    if not sum_parallel_pattern.search(line):
+                        continue
+                    else:
+                        mbps = float(
+                            sum_parallel_pattern.search(line).group(1))
+                        counter += 1
+                        # print(mbps)
 
                 # show summary
                 if average_pattern.match(line):
@@ -81,8 +99,8 @@ class Iperf3_logger(Amari_logger):
                 break
             except (ValueError, IndexError):
                 pass
-            except Exception as e:
-                print(f'==> error: {e.__class__} {e}')
+            # except Exception as e:
+            #     print(f'==> error: {e.__class__} {e}')
 
         self.clean_buffer_and_send()
 
@@ -103,6 +121,8 @@ if __name__ == '__main__':
                         help='length of buffer to read or write (default 128 KB for TCP, 8KB for UDP)')
     parser.add_argument('-w', '--window', metavar='', default=0, type=str,
                         help='set send/receive socket buffer sizes.(indirectly sets TCP window size)')
+    parser.add_argument('-P', '--parallel', metavar='', default=0, type=int,
+                        help='number of parallel client streams to run')
 
     parser.add_argument('-u', '--udp', action="store_true",
                         help='use udp instead of tcp.')
@@ -119,7 +139,8 @@ if __name__ == '__main__':
         udp=args.udp,
         duration=args.duration,
         buffer_length=args.buffer_length,
-        window=args.window
+        window=args.window,
+        parallel=args.parallel
     )
 
     try:
