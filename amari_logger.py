@@ -141,12 +141,12 @@ class Amari_logger:
             thread_1 = threading.Thread(
                 target=self.send_to_influx, args=(self.data_pool,))
             thread_1.start()
+        self.data_pool = []
 
     def logging_with_buffer(self, data):
         self.data_pool.append(data)
         if len(self.data_pool) >= self.number_of_buffer:
             self.data_landing()
-            self.data_pool = []
 
     def clean_buffer_and_send(self):
         if self.data_pool:
