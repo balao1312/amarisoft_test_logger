@@ -14,13 +14,14 @@ import threading
 
 class Ping_logger(Amari_logger):
 
-    def __init__(self, ip, tos, exec_secs, notify_cap, interval):
+    def __init__(self, ip, tos, exec_secs, notify_cap, interval, label):
         super().__init__()
         self.ip = ip
         self.tos = tos
         self.exec_secs = exec_secs
         self.notify_cap = notify_cap
         self.interval = interval
+        self.label = label
 
         self.log_file = self.log_folder.joinpath(
             f'log_ping_{datetime.now().date()}')
@@ -60,11 +61,14 @@ class Ping_logger(Amari_logger):
                         list(filter(None, line.split(' ')))[6][5:10])
                     count += 1
                     print(
-                        f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, dst:{self.ip}, tos: {self.tos}, latency: {latency} ms')
+                        f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, dst:{self.ip}, tos: {self.tos}, lable: {self.label}, latency: {latency} ms')
 
                     data = {
                         'measurement': 'ping',
-                        'tags': {'tos': self.tos},
+                        'tags': {
+                            'tos': self.tos,
+                            'label': self.label
+                        },
                         'time': record_time,
                         'fields': {'RTT': latency}
                     }
@@ -96,10 +100,13 @@ if __name__ == '__main__':
                         help='latency value cap to notify (millisecs)')
     parser.add_argument('-i', '--interval', default=1, type=float,
                         help='interval between packets')
+    parser.add_argument('-l', '--label', metavar='', default='none', type=str,
+                        help='data label')
+
     args = parser.parse_args()
 
     logger = Ping_logger(args.host, args.tos, args.exec_secs,
-                         args.notify_cap, args.interval)
+                         args.notify_cap, args.interval, args.label)
     print(
         f'==> start pinging : {args.host}, tos: {args.tos}, duration: {args.exec_secs} secs\n')
 
