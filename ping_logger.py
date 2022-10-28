@@ -61,7 +61,7 @@ class Ping_logger(Amari_logger):
                         list(filter(None, line.split(' ')))[6][5:10])
                     count += 1
                     print(
-                        f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, dst:{self.ip}, tos: {self.tos}, lable: {self.label}, latency: {latency} ms')
+                        f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, dst:{self.ip}, tos: {self.tos}, label: {self.label}, latency: {latency} ms')
 
                     data = {
                         'measurement': 'ping',
