@@ -13,7 +13,7 @@ import pexpect
 
 class Iperf3_logger(Amari_logger):
 
-    def __init__(self, host, port, tos, bitrate, reverse, udp, duration, buffer_length, window, parallel, set_mss):
+    def __init__(self, host, port, tos, bitrate, reverse, udp, duration, buffer_length, window, parallel, set_mss, label):
         super().__init__()
         self.host = host
         self.tos = tos
@@ -26,6 +26,7 @@ class Iperf3_logger(Amari_logger):
         self.window = window
         self.parallel = parallel
         self.set_mss = set_mss
+        self.label = label
 
         self.log_file = self.log_folder.joinpath(
             f'log_iperf3_{datetime.now().date()}')
@@ -87,11 +88,14 @@ class Iperf3_logger(Amari_logger):
                     continue
 
                 print(
-                    f'{counter}: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, dst:{self.host}, tos:{self.tos}, bitrate: {mbps} Mbit/s')
+                    f'{counter}: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, dst:{self.host}, tos:{self.tos}, label:{self.label}, bitrate: {mbps} Mbit/s')
 
                 data = {
                     'measurement': 'iperf3',
-                    'tags': {'tos': self.tos},
+                    'tags': {
+                        'tos': self.tos,
+                        'label': self.label
+                    },
                     'time': record_time,
                     'fields': {'Mbps': mbps}
                 }
@@ -134,6 +138,10 @@ if __name__ == '__main__':
                         help='use udp instead of tcp.')
     parser.add_argument('-R', '--reverse', action="store_true",
                         help='reverse to downlink from server')
+
+    parser.add_argument('-L', '--label', metavar='', default='none', type=str,
+                        help='data label')
+
     args = parser.parse_args()
 
     logger = Iperf3_logger(
@@ -147,7 +155,8 @@ if __name__ == '__main__':
         buffer_length=args.buffer_length,
         window=args.window,
         parallel=args.parallel,
-        set_mss= args.set_mss
+        set_mss=args.set_mss,
+        label=args.label
     )
 
     try:
