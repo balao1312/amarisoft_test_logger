@@ -77,12 +77,18 @@ class Amari_logger:
         token = self.line_notify_token[dst]
 
         print('==> trying send notify ...')
+
         try:
-            lineNotifyMessage(token, msg)
-            print('==> notify sent.')
+            lineNotifyMessage(token, msg) 
+            print('==> Notify sent.')
+            return 0
         except Exception as e:
-            print(
-                f'==> func: {sys._getframe().f_code.co_name} error: {e.__class__} {e}')
+            # try to show which function is error from
+            # print(f'==> func: {sys._getframe().f_code.co_name} error: {e.__class__} {e}')
+
+            # mostly because no internet
+            print(f'==> Send notify failed. msg: {msg}')
+            return 1
 
     def write_to_file(self):
         with open(self.log_file, 'a') as f:

@@ -10,6 +10,7 @@ from copy import copy
 from amari_logger import Amari_logger
 import argparse
 import threading
+import requests
 
 
 class Ping_logger(Amari_logger):
@@ -22,6 +23,9 @@ class Ping_logger(Amari_logger):
         self.notify_cap = notify_cap
         self.interval = interval
         self.label = label
+        self.unsent_notify = []
+        self.ping_no_return_count = 0
+        self.is_disconnected = False
 
         self.log_file = self.log_folder.joinpath(
             f'log_ping_{datetime.now().date()}')
@@ -32,18 +36,45 @@ class Ping_logger(Amari_logger):
         result = subprocess.check_output(
             [cmd], stderr=subprocess.STDOUT).decode('utf8').strip()
         return result
+    
+    @property
+    def with_internet(self):
+        try:
+            response = requests.get("https://google.com", timeout=5)
+            return True
+        except requests.ConnectionError:
+            return False  
+        
+    def check_notify_msg_and_send(self):
+        while True:
+            # check internet first, assume ok
+            if not self.with_internet:
+                sleep(5)
+                continue
+            # print(self.unsent_notify)
+            if self.unsent_notify:
+                for each_msg in self.unsent_notify:
+                    if self.send_line_notify('balao', each_msg):
+                        continue
+                    self.unsent_notify.remove(each_msg)
 
     def run(self):
+        # start notify check on background
+        thread_check_notify = threading.Thread(target=self.check_notify_msg_and_send, args=([]))
+        thread_check_notify.start()
+
         if self.platform == 'Darwin':
-            tos_option_string = '-z'
-            exec_secs_string = f' -t {self.exec_secs}' if self.exec_secs else ''
+            tos_option_string = '-z '
+            exec_secs_string = f' -t {self.exec_secs} ' if self.exec_secs else ''
+            show_anyway_string = ''
         elif self.platform == 'Linux':
-            tos_option_string = '-Q'
-            exec_secs_string = f' -c {self.exec_secs}' if self.exec_secs else ''
+            tos_option_string = '-Q '
+            show_anyway_string = '-O '
+            exec_secs_string = f'-c {self.exec_secs} ' if self.exec_secs else ''
 
-        interval_string = f' -i {self.interval}'
+        interval_string = f'-i {self.interval}'
 
-        cmd = f'ping {self.ip} {tos_option_string} {self.tos}{exec_secs_string}{interval_string}'
+        cmd = f'ping {show_anyway_string}{self.ip} {tos_option_string}{self.tos} {exec_secs_string}{interval_string}'
         print(f'==> cmd send: {cmd}\n')
         process = subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE)
 
@@ -61,7 +92,7 @@ class Ping_logger(Amari_logger):
                         list(filter(None, line.split(' ')))[6][5:10])
                     count += 1
                     print(
-                        f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, dst:{self.ip}, tos: {self.tos}, label: {self.label}, latency: {latency} ms')
+                        f'{count}: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, dst:{self.ip}, tos: {self.tos}, label: {self.label}, latency: {latency} ms')
 
                     data = {
                         'measurement': 'ping',
@@ -74,6 +105,16 @@ class Ping_logger(Amari_logger):
                     }
                     self.logging_with_buffer(data)
 
+                    # for notify
+                    # reset to 0, for only 5 secs to start notify if disconnect happens again
+                    self.ping_no_return_count = 0
+
+                    # notify for the come back of connection
+                    msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, Connection restored.'
+                    if self.is_disconnected:
+                        self.unsent_notify.append(msg)
+                        self.is_disconnected = False
+
                     if self.notify_cap and latency > self.notify_cap:
                         msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\ngot a RTT from {self.ip} greater than {self.notify_cap} ms.\nvalue: {latency} ms.\nSeq: {count}'
                         thread_1 = threading.Thread(
@@ -81,9 +122,29 @@ class Ping_logger(Amari_logger):
                         thread_1.start()
 
                 except (ValueError, IndexError):
-                    pass
-                except Exception as e:
-                    print(f'==> error: {e.__class__} {e}')
+                    # deal with no connection
+                    if 'no answer' in line:   
+                        self.is_disconnected = True
+                        self.ping_no_return_count += 1
+                        print('.', end='')
+
+                    if self.ping_no_return_count > 5:
+                        print('\n==> ICMP packets are not returned. Maybe the connection is lost.')
+
+                        # Send line notify and deal with if there is no internet
+                        msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, No connection.'
+                        if self.send_line_notify('balao', msg):
+                            self.unsent_notify.append(msg)
+
+                        # if stay disconnected, will notify again after 1hr
+                        self.ping_no_return_count = -3595
+                            # SElf.line_msg_unsent.append(f'{datetime.now()} Connection lost.')
+                            # self.send_attempt += 1
+                            # print(f'==> Notify send attempt for {self.send_attempt} times failed, store to buffer for trying larer.\n')
+                            # print(self.line_msg_unsent)
+
+                # except Exception as e:
+                    # print(f'==> error: {e.__class__} {e}')
 
         self.clean_buffer_and_send()
 
