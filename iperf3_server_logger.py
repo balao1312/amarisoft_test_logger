@@ -9,14 +9,16 @@ from amari_logger import Amari_logger
 import argparse
 import re
 import pexpect
+import threading
 
 
 class Iperf3_logger(Amari_logger):
 
-    def __init__(self, port, parallel, label):
+    def __init__(self, port, parallel, notify, label):
         super().__init__()
         self.port = port
         self.detect_parallel = parallel
+        self.notify_when_terminated = notify
         self.label = label
 
         self.log_file = self.log_folder.joinpath(
@@ -28,16 +30,19 @@ class Iperf3_logger(Amari_logger):
 
         print(f'==> cmd send: \n\n\t{cmd}\n')
         print(f'==> parallel mode: {self.detect_parallel}')
+        print(f'==> notify when terminated: {self.notify_when_terminated}')
         sleep(1)
 
         average_pattern = re.compile(r'.*(sender|receiver)')
         sum_parallel_pattern = re.compile(r'^\[SUM\].*\ ([0-9.]*)\ Mbits\/sec')
         standby_pattern = re.compile(r'Server listening')
 
+        # iperf3: the client has terminated
+        terminated_pattern = re.compile(r'iperf3:')
+
         child = pexpect.spawnu(cmd, timeout=10)
 
         counter = 0
-
         while True:
             try:
                 child.expect('\n')
@@ -48,6 +53,13 @@ class Iperf3_logger(Amari_logger):
                 # detect session end and clean buffer
                 if standby_pattern.match(line):
                     self.clean_buffer_and_send()
+
+                # notify when terminated
+                if terminated_pattern.match(line) and self.notify_when_terminated:
+                    msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n{self.label}\n{line}.'
+                    thread_1 = threading.Thread(
+                        target=self.send_line_notify, args=('balao', msg))
+                    thread_1.start()
 
                 # check if in parallel mode
                 if not self.detect_parallel:
@@ -84,6 +96,10 @@ class Iperf3_logger(Amari_logger):
                 pass
             except pexpect.exceptions.EOF as e:
                 print('==> got EOF, ended.')
+                msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n{self.lable} iperf server got an EOF.'
+                thread_1 = threading.Thread(
+                    target=self.send_line_notify, args=('balao', msg))
+                thread_1.start()
                 break
             except (ValueError, IndexError):
                 pass
@@ -99,6 +115,8 @@ if __name__ == '__main__':
                         help='iperf server port')
     parser.add_argument('-P', '--parallel', action="store_true",
                         help='detect client in parallel mode')
+    parser.add_argument('-n', '--notify', action="store_true",
+                        help='notify when terminated')
     parser.add_argument('-l', '--label', metavar='', default='', type=str, required=True,
                         help='data label')
 
@@ -107,7 +125,8 @@ if __name__ == '__main__':
     logger = Iperf3_logger(
         port=args.port,
         parallel=args.parallel,
-        label=args.label,
+        notify=args.notify,
+        label=args.label
     )
 
     try:
@@ -131,3 +150,4 @@ if __name__ == '__main__':
             os._exit(0)
     # except Exception as e:
     #     print(f'==> error: {e.__class__} {e}')
+
