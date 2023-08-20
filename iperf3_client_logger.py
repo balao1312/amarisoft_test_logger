@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+from pathlib import Path
 import sys
 import os
 from time import sleep
@@ -28,41 +29,84 @@ class Iperf3_logger(Amari_logger):
         self.set_mss = set_mss
         self.label = label
 
+        # define RE patterns
+        self.average_pattern = re.compile(r'.*(sender|receiver)')
+        self.sum_parallel_pattern = re.compile(
+            r'^\[SUM\].*\ ([0-9.]*)\ Mbits\/sec')
+
+    def refresh_log_file(self):
         self.log_file = self.log_folder.joinpath(
             f'log_iperf3_{datetime.now().date()}')
+        self.stdout_log_file = self.log_folder.joinpath(
+            f'stdout_iperf3_client_{datetime.now().date()}.txt')
+        self.stdout_log_object = open(self.stdout_log_file, 'a')
+
+        self.stdout_log_object.write(
+            f'\n\n{"-"*80}\nNew session starts at: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n')
+
+        print(
+            f'==> iperf3 stdout will be logged to: {self.stdout_log_file}.txt')
+
+    def parse_args_to_string(self):
+        self.tos_string = f' -S {self.tos}' if self.tos else ''
+        self.bitrate_string = f' -b {self.bitrate}' if self.bitrate else ''
+        self.buffer_length_string = f' -l {self.buffer_length}' if self.buffer_length else ''
+        self.window_string = f' -w {self.window}' if self.window else ''
+        self.parallel_string = f' -P {self.parallel}' if self.parallel else ''
+        self.set_mss_string = f' -M {self.set_mss}' if self.set_mss else ''
+
+        self.reverse_string = ' -R' if self.reverse else ''
+        self.udp_string = ' -u' if self.udp else ''
+
+        self.cmd = f'iperf3 -c {self.host} -p {self.port} -t {self.duration} -f m'\
+            f'{self.tos_string}'\
+            f'{self.bitrate_string}'\
+            f'{self.buffer_length_string}'\
+            f'{self.window_string}'\
+            f'{self.parallel_string}'\
+            f'{self.set_mss_string}'\
+            f'{self.reverse_string}'\
+            f'{self.udp_string}'
+        print(f'==> cmd send: \n\n\t{self.cmd}\n')
+        self.stdout_log_object.write(f'iperf3 cmd: {self.cmd}\n{"-"*80}\n')
+
+    def show_progress(self, counter, mbps):
+        print(
+            f'{counter}: '
+            f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, '
+            f'dst: {self.host}, '
+            # f'tos: {self.tos}, '
+            f'label: {self.label}, '
+            f'bitrate: {mbps} Mbit/s'
+        )
+
+    def check_if_is_summary_and_show(self, line):
+        if self.average_pattern.match(line):
+            print(self.average_pattern.search(line).group(0))
+            return True
+        else:
+            return False
+
+    def gen_influx_format(self, record_time, mbps):
+        return {
+            'measurement': 'iperf3',
+            'tags': {
+                'tos': self.tos,
+                'label': self.label
+            },
+            'time': record_time,
+            'fields': {'Mbps': mbps}
+        }
 
     def run(self):
-        # parse options to cmd string
-        tos_string = f' -S {self.tos}' if self.tos else ''
-        bitrate_string = f' -b {self.bitrate}' if self.bitrate else ''
-        buffer_length_string = f' -l {self.buffer_length}' if self.buffer_length else ''
-        window_string = f' -w {self.window}' if self.window else ''
-        parallel_string = f' -P {self.parallel}' if self.parallel else ''
-        set_mss_string = f' -M {self.set_mss}' if self.set_mss else ''
-
-        reverse_string = ' -R' if self.reverse else ''
-        udp_string = ' -u' if self.udp else ''
-
-        cmd = f'iperf3 -c {self.host} -p {self.port} -t {self.duration} -f m'\
-            f'{tos_string}'\
-            f'{bitrate_string}'\
-            f'{buffer_length_string}'\
-            f'{window_string}'\
-            f'{parallel_string}'\
-            f'{set_mss_string}'\
-            f'{reverse_string}'\
-            f'{udp_string}'
-
-        print(f'==> cmd send: \n\n\t{cmd}\n')
+        self.refresh_log_file()
+        self.parse_args_to_string()
         sleep(1)
 
-        average_pattern = re.compile(r'.*(sender|receiver)')
-        sum_parallel_pattern = re.compile(r'^\[SUM\].*\ ([0-9.]*)\ Mbits\/sec')
-
-        child = pexpect.spawnu(cmd, timeout=10)
+        child = pexpect.spawnu(self.cmd, timeout=10,
+                               logfile=self.stdout_log_object)
 
         counter = 0
-
         while True:
             try:
                 child.expect('\n')
@@ -70,46 +114,33 @@ class Iperf3_logger(Amari_logger):
                 record_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
                 # check if parallel number > 2
+                # must be a better way, TODO
                 if self.parallel < 2:
                     mbps = float(list(filter(None, line.split(' ')))[6])
                     counter += 1
                 else:
-                    if not sum_parallel_pattern.search(line):
+                    if not self.sum_parallel_pattern.search(line):
                         continue
                     else:
                         mbps = float(
-                            sum_parallel_pattern.search(line).group(1))
+                            self.sum_parallel_pattern.search(line).group(1))
                         counter += 1
-                        # print(mbps)
 
-                # show summary
-                if average_pattern.match(line):
-                    print(average_pattern.search(line).group(0))
+                if self.check_if_is_summary_and_show(line):
                     continue
 
-                print(
-                    f'{counter}: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, dst:{self.host}, tos:{self.tos}, label:{self.label}, bitrate: {mbps} Mbit/s')
+                self.show_progress(counter, mbps)
 
-                data = {
-                    'measurement': 'iperf3',
-                    'tags': {
-                        'tos': self.tos,
-                        'label': self.label
-                    },
-                    'time': record_time,
-                    'fields': {'Mbps': mbps}
-                }
-
+                data = self.gen_influx_format(record_time, mbps)
                 self.logging_with_buffer(data)
 
             except pexpect.exceptions.EOF as e:
                 print('==> got EOF, ended.')
+                self.stdout_log_object.close()
                 break
             except (ValueError, IndexError):
+                # skip iperf stdout that DONT contain throughput lines
                 pass
-            # except Exception as e:
-            #     print(f'==> error: {e.__class__} {e}')
-
         self.clean_buffer_and_send()
 
 
@@ -133,12 +164,10 @@ if __name__ == '__main__':
                         help='number of parallel client streams to run')
     parser.add_argument('-M', '--set-mss', metavar='', default=0, type=int,
                         help='set TCP/SCTP maximum segment size (MTU - 40 bytes)')
-
     parser.add_argument('-u', '--udp', action="store_true",
                         help='use udp instead of tcp.')
     parser.add_argument('-R', '--reverse', action="store_true",
                         help='reverse to downlink from server')
-
     parser.add_argument('-L', '--label', metavar='', default='none', type=str,
                         help='data label')
 
@@ -178,5 +207,3 @@ if __name__ == '__main__':
             sys.exit(0)
         except SystemExit:
             os._exit(0)
-    # except Exception as e:
-    #     print(f'==> error: {e.__class__} {e}')
