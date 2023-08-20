@@ -17,30 +17,65 @@ class Iperf3_logger(Amari_logger):
     def __init__(self, port, parallel, notify, label):
         super().__init__()
         self.port = port
-        self.detect_parallel = parallel
+        self.is_in_parallel_mode = parallel
         self.notify_when_terminated = notify
         self.label = label
 
-        self.log_file = self.log_folder.joinpath(
-            f'log_iperf3_{datetime.now().date()}')
-
-    def run(self):
-
-        cmd = f'iperf3 -s -p {self.port} -f m'
-
-        print(f'==> cmd send: \n\n\t{cmd}\n')
-        print(f'==> parallel mode: {self.detect_parallel}')
-        print(f'==> notify when terminated: {self.notify_when_terminated}')
-        sleep(1)
-
-        average_pattern = re.compile(r'.*(sender|receiver)')
-        sum_parallel_pattern = re.compile(r'^\[SUM\].*\ ([0-9.]*)\ Mbits\/sec')
-        standby_pattern = re.compile(r'Server listening')
+        # define RE patterns
+        self.average_pattern = re.compile(r'.*(sender|receiver)')
+        self.sum_parallel_pattern = re.compile(
+            r'^\[SUM\].*\ ([0-9.]*)\ Mbits\/sec')
+        self.standby_pattern = re.compile(r'Server listening')
 
         # iperf3: the client has terminated
-        terminated_pattern = re.compile(r'iperf3:')
+        self.terminated_pattern = re.compile(r'iperf3:')
 
-        child = pexpect.spawnu(cmd, timeout=10)
+    def refresh_log_file(self):
+        self.log_file = self.log_folder.joinpath(
+            f'log_iperf3_{datetime.now().date()}')
+        self.stdout_log_file = self.log_folder.joinpath(
+            f'stdout_iperf3_server_{datetime.now().date()}.txt')
+        self.stdout_log_object = open(self.stdout_log_file, 'a')
+
+        self.stdout_log_object.write(
+            f'\n\n{"-"*80}\nNew session starts at: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n')
+
+        print(
+            f'==> iperf3 stdout will be logged to: {self.stdout_log_file}.txt')
+
+    def parse_args_to_string(self):
+        self.cmd = f'iperf3 -s -p {self.port} -f m'
+
+        print(f'==> cmd send: \n\n\t{self.cmd}\n')
+        print(f'==> parallel mode: {self.is_in_parallel_mode}, ******* check this arg or the result would be wrong!')
+        print(f'==> notify when terminated: {self.notify_when_terminated}')
+        print(f'==> influxdb label used: {self.label}')
+        self.stdout_log_object.write(f'iperf3 cmd: {self.cmd}\n{"-"*80}\n')
+
+    def check_if_is_summary_and_show(self, line):
+        if self.average_pattern.match(line):
+            print(self.average_pattern.search(line).group(0))
+            return True
+        else:
+            return False
+
+    def gen_influx_format(self, record_time, mbps):
+        return {
+            'measurement': 'iperf3',
+            'tags': {
+                'label': self.label
+            },
+            'time': record_time,
+            'fields': {'Mbps': mbps}
+        }
+
+    def run(self):
+        self.refresh_log_file()
+        self.parse_args_to_string()
+        sleep(1)
+
+        child = pexpect.spawnu(self.cmd, timeout=60,
+                               logfile=self.stdout_log_object)
 
         counter = 0
         while True:
@@ -51,48 +86,38 @@ class Iperf3_logger(Amari_logger):
                 record_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
                 # detect session end and clean buffer
-                if standby_pattern.match(line):
+                if self.standby_pattern.match(line):
                     self.clean_buffer_and_send()
 
                 # notify when terminated
-                if terminated_pattern.match(line) and self.notify_when_terminated:
-                    msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n{self.label}\n{line}.'
+                if self.terminated_pattern.match(line) and self.notify_when_terminated:
+                    msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n{self.label}\n{line.strip()}.'
                     thread_1 = threading.Thread(
                         target=self.send_line_notify, args=('balao', msg))
                     thread_1.start()
 
                 # check if in parallel mode
-                if not self.detect_parallel:
+                # must be a better way, TODO
+                if not self.is_in_parallel_mode:
                     mbps = float(list(filter(None, line.split(' ')))[6])
                     counter += 1
                 else:
-                    if not sum_parallel_pattern.search(line):
+                    if not self.sum_parallel_pattern.search(line):
                         continue
                     else:
                         mbps = float(
-                            sum_parallel_pattern.search(line).group(1))
+                            self.sum_parallel_pattern.search(line).group(1))
                         counter += 1
                         # print(mbps)
 
-                # show summary
-                if average_pattern.match(line):
-                    print(average_pattern.search(line).group(0))
+                if self.check_if_is_summary_and_show(line):
                     continue
 
-                # print(
-                #     f'{counter}: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, bitrate: {mbps} Mbit/s')
-
-                data = {
-                    'measurement': 'iperf3',
-                    'tags': {'label': self.label},
-                    'time': record_time,
-                    'fields': {'Mbps': mbps}
-                }
-
+                data = self.gen_influx_format(record_time, mbps)
                 self.logging_with_buffer(data)
 
             except pexpect.TIMEOUT as e:
-                # print('==> timeout.')
+                # print('==> pexpect timeout.')
                 pass
             except pexpect.exceptions.EOF as e:
                 print('==> got EOF, ended.')
@@ -102,10 +127,8 @@ class Iperf3_logger(Amari_logger):
                 thread_1.start()
                 break
             except (ValueError, IndexError):
+                # skip iperf stdout that DONT contain throughput lines
                 pass
-            # except Exception as e:
-            #     print(f'==> error: {e.__class__} {e}')
-
         self.clean_buffer_and_send()
 
 
@@ -148,6 +171,3 @@ if __name__ == '__main__':
             sys.exit(0)
         except SystemExit:
             os._exit(0)
-    # except Exception as e:
-    #     print(f'==> error: {e.__class__} {e}')
-
