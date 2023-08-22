@@ -1,7 +1,6 @@
 #!/usr/bin/python3
 
 import subprocess
-import shlex
 import sys
 import os
 from time import sleep
@@ -11,6 +10,8 @@ from amari_logger import Amari_logger
 import argparse
 import threading
 import requests
+import pexpect
+import signal
 
 
 class Ping_logger(Amari_logger):
@@ -26,9 +27,19 @@ class Ping_logger(Amari_logger):
         self.unsent_notify = []
         self.ping_no_return_count = 0
         self.is_disconnected = False
+        # self.is_send_notify_when_no_reply = False
 
+    def refresh_log_file(self):
         self.log_file = self.log_folder.joinpath(
             f'log_ping_{datetime.now().date()}')
+        self.stdout_log_file = self.log_folder.joinpath(
+            f'stdout_ping_{datetime.now().date()}.txt')
+        self.stdout_log_object = open(self.stdout_log_file, 'a')
+        self.stdout_log_object.write(
+            f'\n\n{"-"*80}\nNew session starts at: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n')
+
+        print(
+            f'==> ping stdout will be logged to: {self.stdout_log_file}.txt')
 
     @property
     def platform(self):
@@ -36,118 +47,143 @@ class Ping_logger(Amari_logger):
         result = subprocess.check_output(
             [cmd], stderr=subprocess.STDOUT).decode('utf8').strip()
         return result
-    
+
     @property
-    def with_internet(self):
+    def is_with_internet(self):
         try:
             response = requests.get("https://google.com", timeout=5)
             return True
-        except requests.ConnectionError:
-            return False  
-        
+        except (requests.ConnectionError, requests.ReadTimeout):
+            return False
+
+    def parse_args_to_string(self):
+        if self.platform == 'Darwin':
+            tos_option_string = '-z'
+            show_anyway_string = ''
+        elif self.platform == 'Linux':
+            tos_option_string = '-Q'
+            show_anyway_string = '-O '
+
+        exec_secs_string = f'-c {self.exec_secs} ' if self.exec_secs else ''
+        interval_string = f'-i {self.interval}'
+
+        self.cmd = f'ping {show_anyway_string}{self.ip} '\
+                   f'{tos_option_string} '\
+                   f'{self.tos} '\
+                   f'{exec_secs_string}'\
+                   f'{interval_string}'
+
+        print(f'==> cmd send: \n\t\t{self.cmd}\n')
+        # TODO, add an option to toggle, now is always send
+        # print(f'==> notify when terminated: {}')
+        print(f'==> influxdb label used: {self.label}')
+        print('-'*80)
+        self.stdout_log_object.write(f'ping cmd: {self.cmd}\n{"-"*80}\n')
+
     def check_notify_msg_and_send(self):
-        while True:
-            # check internet first, assume ok
-            if not self.with_internet:
+        # for linux only right now (due to ping no reply prompt)
+        # TODO: adapt for mac
+        sleep(3)
+        while not self.child.closed:
+            # check internet first
+            if not self.is_with_internet:
                 sleep(5)
                 continue
-            # print(self.unsent_notify)
             if self.unsent_notify:
+                print('==> Find unsend notify before, try sending...')
                 for each_msg in self.unsent_notify:
                     if self.send_line_notify('balao', each_msg):
+                        # if send notify failed, keep msg in unsent_notify
                         continue
                     self.unsent_notify.remove(each_msg)
+            sleep(2)
+        return
+
+    def gen_influx_format(self, record_time, latency):
+        return {
+            'measurement': 'ping',
+            'tags': {
+                'tos': self.tos,
+                'label': self.label
+            },
+            'time': record_time,
+            'fields': {'RTT': latency}
+        }
 
     def run(self):
         # start notify check on background
-        thread_check_notify = threading.Thread(target=self.check_notify_msg_and_send, args=([]))
-        thread_check_notify.start()
+        self.thread_check_notify = threading.Thread(
+            target=self.check_notify_msg_and_send, args=([]))
+        self.thread_check_notify.start()
 
-        if self.platform == 'Darwin':
-            tos_option_string = '-z '
-            exec_secs_string = f' -t {self.exec_secs} ' if self.exec_secs else ''
-            show_anyway_string = ''
-        elif self.platform == 'Linux':
-            tos_option_string = '-Q '
-            show_anyway_string = '-O '
-            exec_secs_string = f'-c {self.exec_secs} ' if self.exec_secs else ''
+        self.refresh_log_file()
+        self.parse_args_to_string()
+        sleep(1)
 
-        interval_string = f'-i {self.interval}'
-
-        cmd = f'ping {show_anyway_string}{self.ip} {tos_option_string}{self.tos} {exec_secs_string}{interval_string}'
-        print(f'==> cmd send: {cmd}\n')
-        process = subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE)
-
-        count = 0
+        self.child = pexpect.spawnu(self.cmd, timeout=10,
+                               logfile=self.stdout_log_object)
+        counter = 0
         while True:
-            output = process.stdout.readline()
-            if process.poll() is not None:
-                break
-
-            if output:
-                line = output.strip().decode('utf8')
+            try:
+                self.child.expect('\n')
+                line = self.child.before
                 record_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-                try:
-                    latency = float(
-                        list(filter(None, line.split(' ')))[6][5:10])
-                    count += 1
+                latency = float(
+                    list(filter(None, line.split(' ')))[6][5:10])
+                counter += 1
+                print(
+                    f'{counter}: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, dst:{self.ip}, tos: {self.tos}, label: {self.label}, latency: {latency} ms')
+
+                data = self.gen_influx_format(record_time, latency)
+                self.logging_with_buffer(data)
+
+                # for notify, reset to 0, for only 5 secs to start notify if disconnect happens again
+                self.ping_no_return_count = 0
+
+                # notify for the come back of connection
+                msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, Connection restored.'
+                if self.is_disconnected:
+                    self.unsent_notify.append(msg)
+                    self.is_disconnected = False
+
+                # send notify when latency is higher then user defined
+                # TODO: func it
+                if self.notify_cap and latency > self.notify_cap:
+                    msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\ngot a RTT from {self.ip} greater than {self.notify_cap} ms.\nvalue: {latency} ms.\nSeq: {counter}'
+                    thread_1 = threading.Thread(
+                        target=self.send_line_notify, args=('balao', msg))
+                    thread_1.start()
+
+            except (ValueError, IndexError):
+                # deal with no reply
+                if 'no answer' in line:
+                    self.is_disconnected = True
+                    self.ping_no_return_count += 1
+                    print('.', end='')
+
+                if self.ping_no_return_count > 5:
                     print(
-                        f'{count}: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, dst:{self.ip}, tos: {self.tos}, label: {self.label}, latency: {latency} ms')
+                        '\n==> ICMP packets are not returned. Destination:{self.host} cannot be reached.')
 
-                    data = {
-                        'measurement': 'ping',
-                        'tags': {
-                            'tos': self.tos,
-                            'label': self.label
-                        },
-                        'time': record_time,
-                        'fields': {'RTT': latency}
-                    }
-                    self.logging_with_buffer(data)
-
-                    # for notify
-                    # reset to 0, for only 5 secs to start notify if disconnect happens again
-                    self.ping_no_return_count = 0
-
-                    # notify for the come back of connection
-                    msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, Connection restored.'
-                    if self.is_disconnected:
+                    # Send line notify and deal with if there is no internet
+                    msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, No connection.'
+                    if self.send_line_notify('balao', msg):
                         self.unsent_notify.append(msg)
-                        self.is_disconnected = False
 
-                    if self.notify_cap and latency > self.notify_cap:
-                        msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\ngot a RTT from {self.ip} greater than {self.notify_cap} ms.\nvalue: {latency} ms.\nSeq: {count}'
-                        thread_1 = threading.Thread(
-                            target=self.send_line_notify, args=('balao', msg))
-                        thread_1.start()
-
-                except (ValueError, IndexError):
-                    # deal with no connection
-                    if 'no answer' in line:   
-                        self.is_disconnected = True
-                        self.ping_no_return_count += 1
-                        print('.', end='')
-
-                    if self.ping_no_return_count > 5:
-                        print('\n==> ICMP packets are not returned. Maybe the connection is lost.')
-
-                        # Send line notify and deal with if there is no internet
-                        msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, No connection.'
-                        if self.send_line_notify('balao', msg):
-                            self.unsent_notify.append(msg)
-
-                        # if stay disconnected, will notify again after 1hr
-                        self.ping_no_return_count = -3595
-                            # SElf.line_msg_unsent.append(f'{datetime.now()} Connection lost.')
-                            # self.send_attempt += 1
-                            # print(f'==> Notify send attempt for {self.send_attempt} times failed, store to buffer for trying larer.\n')
-                            # print(self.line_msg_unsent)
-
-                # except Exception as e:
-                    # print(f'==> error: {e.__class__} {e}')
-
+                    # if stay disconnected, will notify again after 1hr
+                    self.ping_no_return_count = -3595
+                    # SElf.line_msg_unsent.append(f'{datetime.now()} Connection lost.')
+                    # self.send_attempt += 1
+                    # print(f'==> Notify send attempt for {self.send_attempt} times failed, store to buffer for trying larer.\n')
+                    # print(self.line_msg_unsent)
+            except pexpect.exceptions.EOF as e:
+                print('==> got EOF, ended.')
+                self.stdout_log_object.close()
+                break
         self.clean_buffer_and_send()
 
+        self.child.close()
+        # self.thread_check_notify.join()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -159,7 +195,7 @@ if __name__ == '__main__':
                         help='time duration (secs)')
     parser.add_argument('-n', '--notify_cap', default=0, type=int,
                         help='latency value cap to notify (millisecs)')
-    parser.add_argument('-i', '--interval', default=1, type=float,
+    parser.add_argument('-i', '--interval', default=1, type=int,
                         help='interval between packets')
     parser.add_argument('-l', '--label', metavar='', default='none', type=str,
                         help='data label')
@@ -168,15 +204,20 @@ if __name__ == '__main__':
 
     logger = Ping_logger(args.host, args.tos, args.exec_secs,
                          args.notify_cap, args.interval, args.label)
-    print(
-        f'==> start pinging : {args.host}, tos: {args.tos}, duration: {args.exec_secs} secs\n')
 
     try:
         logger.run()
     except KeyboardInterrupt:
+        with open(logger.stdout_log_file, 'a') as f:
+            f.write('==> Get Ctrl+C.\n')
+        logger.stdout_log_object.close()
+
+        # TODO: show statistics
         print('\n==> Interrupted.\n')
         logger.clean_buffer_and_send()
         sleep(0.1)
+
+        # try send data in buffer before close, timeout can be set in config.py
         max_sec_count = logger.db_retries * logger.db_timeout
         countdown = copy(max_sec_count)
         while logger.is_sending:
@@ -190,5 +231,4 @@ if __name__ == '__main__':
             sys.exit(0)
         except SystemExit:
             os._exit(0)
-    except Exception as e:
-        print(f'==> error: {e.__class__} {e}')
+
