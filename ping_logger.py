@@ -60,9 +60,11 @@ class Ping_logger(Amari_logger):
         if self.platform == 'Darwin':
             tos_option_string = '-z'
             show_anyway_string = ''
+            self.prompt_when_no_reply = 'Request timeout'
         elif self.platform == 'Linux':
             tos_option_string = '-Q'
             show_anyway_string = '-O '
+            self.prompt_when_no_reply = 'no answer'
 
         exec_secs_string = f'-c {self.exec_secs} ' if self.exec_secs else ''
         interval_string = f'-i {self.interval}'
@@ -81,22 +83,14 @@ class Ping_logger(Amari_logger):
         self.stdout_log_object.write(f'ping cmd: {self.cmd}\n{"-"*80}\n')
 
     def check_notify_msg_and_send(self):
-        # for linux only right now (due to ping no reply prompt)
-        # TODO: adapt for mac
-        sleep(3)
-        while not self.child.closed:
-            # check internet first
-            if not self.is_with_internet:
-                sleep(5)
-                continue
-            if self.unsent_notify:
-                print('==> Find unsend notify before, try sending...')
-                for each_msg in self.unsent_notify:
-                    if self.send_line_notify('balao', each_msg):
-                        # if send notify failed, keep msg in unsent_notify
-                        continue
+        # TODO: send notify in another thread
+        if not self.is_with_internet:
+            return
+        if self.unsent_notify:
+            print(f'==> Find {len(self.unsent_notify)} unsend notify before, try sending...')
+            for each_msg in self.unsent_notify:
+                if not self.send_line_notify('balao', each_msg):
                     self.unsent_notify.remove(each_msg)
-            sleep(2)
         return
 
     def gen_influx_format(self, record_time, latency):
@@ -121,7 +115,7 @@ class Ping_logger(Amari_logger):
         sleep(1)
 
         self.child = pexpect.spawnu(self.cmd, timeout=10,
-                               logfile=self.stdout_log_object)
+                                    logfile=self.stdout_log_object)
         counter = 0
         while True:
             try:
@@ -141,7 +135,7 @@ class Ping_logger(Amari_logger):
                 self.ping_no_return_count = 0
 
                 # notify for the come back of connection
-                msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, Connection restored.'
+                msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, {self.ip} can be reached again. :)'
                 if self.is_disconnected:
                     self.unsent_notify.append(msg)
                     self.is_disconnected = False
@@ -153,20 +147,22 @@ class Ping_logger(Amari_logger):
                     thread_1 = threading.Thread(
                         target=self.send_line_notify, args=('balao', msg))
                     thread_1.start()
+                
+                self.check_notify_msg_and_send()
 
             except (ValueError, IndexError):
                 # deal with no reply
-                if 'no answer' in line:
+                if self.prompt_when_no_reply in line:
                     self.is_disconnected = True
                     self.ping_no_return_count += 1
                     print('.', end='')
 
                 if self.ping_no_return_count > 5:
                     print(
-                        '\n==> ICMP packets are not returned. Destination:{self.host} cannot be reached.')
+                        f'\n==> ICMP packets are not returned. Target IP:{self.ip} cannot be reached. ')
 
                     # Send line notify and deal with if there is no internet
-                    msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, No connection.'
+                    msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, 5G connection Lost! Cannot reach {self.ip}. Check connection!'
                     if self.send_line_notify('balao', msg):
                         self.unsent_notify.append(msg)
 
@@ -178,12 +174,14 @@ class Ping_logger(Amari_logger):
                     # print(self.line_msg_unsent)
             except pexpect.exceptions.EOF as e:
                 print('==> got EOF, ended.')
+                # self.check_notify_msg_and_send()
                 self.stdout_log_object.close()
                 break
         self.clean_buffer_and_send()
 
         self.child.close()
         # self.thread_check_notify.join()
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -231,4 +229,3 @@ if __name__ == '__main__':
             sys.exit(0)
         except SystemExit:
             os._exit(0)
-
