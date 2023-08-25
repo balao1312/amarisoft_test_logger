@@ -153,11 +153,12 @@ class Ping_logger(Amari_logger):
             except (ValueError, IndexError):
                 # deal with no reply
                 if self.prompt_when_no_reply in line:
-                    self.is_disconnected = True
                     self.ping_no_return_count += 1
                     print('.', end='')
-
+                
+                # if more than 5 packet lost back to back,than consider it disconnected.
                 if self.ping_no_return_count > 5:
+                    self.is_disconnected = True
                     print(
                         f'\n==> ICMP packets are not returned. Target IP:{self.ip} cannot be reached. ')
 
