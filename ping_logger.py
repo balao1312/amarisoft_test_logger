@@ -267,10 +267,8 @@ if __name__ == '__main__':
             f.write('==> Get Ctrl+C.\n')
         logger.write_summary_to_stdout_file()
         logger.stdout_log_object.close()
-
-        # TODO: show statistics
-        print('\n==> Interrupted.\n')
         logger.clean_buffer_and_send()
+        print('\n==> Interrupted.\n')
         sleep(0.1)
 
         # try send data in buffer before close, timeout can be set in config.py
