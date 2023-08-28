@@ -136,28 +136,15 @@ class Ping_logger(Amari_logger):
         while True:
             try:
                 self.child.expect('\n')
-                line = self.child.before
-                record_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+            except pexpect.exceptions.EOF as e:
+                print('==> got EOF, ended.')
+                self.stdout_log_object.close()
+                break
+
+            line = self.child.before
+            try:
                 latency = float(
                     list(filter(None, line.split(' ')))[6][5:10])
-                counter += 1
-                print(
-                    f'{counter}: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, dst:{self.ip}, tos: {self.tos}, label: {self.label}, latency: {latency} ms')
-
-                data = self.gen_influx_format(record_time, latency)
-                self.logging_with_buffer(data)
-
-                # for notify, reset to 0, for only 5 secs to start notify if disconnect happens again
-                self.ping_no_return_count = 0
-
-                # notify for the come back of connection
-                msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, {self.ip} can be reached again. :)'
-                if self.is_disconnected:
-                    self.unsent_notify.append(msg)
-                    self.is_disconnected = False
-
-                self.check_if_latency_higher_than_criteria(latency, counter)
-
             except (ValueError, IndexError):
                 # deal with no reply
                 if self.prompt_when_no_reply in line:
@@ -177,11 +164,27 @@ class Ping_logger(Amari_logger):
 
                     # if stay disconnected, will notify again after 1hr
                     self.ping_no_return_count = -3595
+                continue
 
-            except pexpect.exceptions.EOF as e:
-                print('==> got EOF, ended.')
-                self.stdout_log_object.close()
-                break
+            record_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+            counter += 1
+            print(
+                f'{counter}: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, dst:{self.ip}, tos: {self.tos}, label: {self.label}, latency: {latency} ms')
+
+            data = self.gen_influx_format(record_time, latency)
+            self.logging_with_buffer(data)
+
+            # for notify, reset to 0, for only 5 secs to start notify if disconnect happens again
+            self.ping_no_return_count = 0
+
+            # notify for the come back of connection
+            if self.is_disconnected:
+                msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, {self.ip} can be reached again. :)'
+                self.unsent_notify.append(msg)
+                self.is_disconnected = False
+
+            self.check_if_latency_higher_than_criteria(latency, counter)
+
         self.clean_buffer_and_send()
         self.child.close()
 
