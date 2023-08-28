@@ -129,6 +129,13 @@ class Ping_logger(Amari_logger):
                 f'got a RTT value from {self.ip} higher than {self.notify_cap} ms.\n'\
                 f'value: {latency} ms.\nSeq: {counter}'
             self.unsent_notify.append(msg)
+    
+    def show_every_sec_result(self, counter, latency):
+        msg = f'{counter}: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, '\
+        f'dst: {self.ip}, '\
+        f'label: {self.label}, '\
+        f'latency: {latency} ms'
+        print(msg)
 
     def run(self):
         self.refresh_log_file()
@@ -181,8 +188,8 @@ class Ping_logger(Amari_logger):
 
             record_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
             counter += 1
-            print(
-                f'{counter}: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, dst:{self.ip}, tos: {self.tos}, label: {self.label}, latency: {latency} ms')
+            
+            self.show_every_sec_result(counter, latency)
 
             data = self.gen_influx_format(record_time, latency)
             self.logging_with_buffer(data)
