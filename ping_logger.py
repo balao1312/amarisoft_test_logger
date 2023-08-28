@@ -81,8 +81,11 @@ class Ping_logger(Amari_logger):
                    f'{exec_secs_string}'\
                    f'{interval_string}'
 
-        print(f'==> send line notify: {self.will_send_notify}')
         print(f'==> influxdb label used: {self.label}')
+        print(f'==> send line notify: {self.will_send_notify}')
+        if self.notify_cap:
+            print(
+                f'==> send notify when latency is higher than: {self.notify_cap} ms')
         if self.project_field_name:
             print(f'==> project field name: {self.project_field_name}')
         print(f'==> cmd send: \n\t\t{self.cmd}\n')
@@ -103,7 +106,7 @@ class Ping_logger(Amari_logger):
                 print(
                     f'==> Find {len(self.unsent_notify)} unsend notify before, try sending...')
                 for each_msg in self.unsent_notify:
-                    msg_with_projectf_field_name = f'\n{self.project_field_name}\n{each_msg}'
+                    msg_with_projectf_field_name = f'\n[{self.project_field_name}]\n{each_msg}'
                     if not self.send_line_notify('balao', msg_with_projectf_field_name):
                         self.unsent_notify.remove(each_msg)
                     sleep(1)
@@ -130,7 +133,8 @@ class Ping_logger(Amari_logger):
     def run(self):
         self.refresh_log_file()
         self.parse_args_to_string()
-        sleep(1)
+        if input('Please confirm info above and press enter to continue.\n') != '':
+            return
 
         self.child = pexpect.spawnu(self.cmd, timeout=10,
                                     logfile=self.stdout_log_object)
@@ -168,7 +172,7 @@ class Ping_logger(Amari_logger):
                         f'\n==> ICMP packets are not returned. Target IP: {self.ip} cannot be reached. ')
 
                     # Send line notify
-                    msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, 5G connection Lost! Cannot reach {self.ip}. Check connection!'
+                    msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, target IP {self.ip} cannot be reached.'
                     self.unsent_notify.append(msg)
 
                     # if stay disconnected, will notify again after 1hr
