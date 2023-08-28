@@ -16,18 +16,18 @@ import signal
 
 class Ping_logger(Amari_logger):
 
-    def __init__(self, ip, tos, exec_secs, notify_cap, interval, label):
+    def __init__(self, ip, tos, exec_secs, notify, notify_cap, interval, label):
         super().__init__()
         self.ip = ip
         self.tos = tos
         self.exec_secs = exec_secs
+        self.will_send_notify = notify
         self.notify_cap = notify_cap
         self.interval = interval
         self.label = label
         self.unsent_notify = []
         self.ping_no_return_count = 0
         self.is_disconnected = False
-        # self.is_send_notify_when_no_reply = False
 
     def refresh_log_file(self):
         self.log_file = self.log_folder.joinpath(
@@ -75,14 +75,16 @@ class Ping_logger(Amari_logger):
                    f'{exec_secs_string}'\
                    f'{interval_string}'
 
-        print(f'==> cmd send: \n\t\t{self.cmd}\n')
-        # TODO, add an option to toggle, now is always send
-        # print(f'==> notify when terminated: {}')
+        print(f'==> send line notify: {self.will_send_notify}')
         print(f'==> influxdb label used: {self.label}')
+        print(f'==> cmd send: \n\t\t{self.cmd}\n')
         print('-'*80)
         self.stdout_log_object.write(f'ping cmd: {self.cmd}\n{"-"*80}\n')
 
     def check_unsend_notify_and_try_send(self):
+        '''
+        All notify msg will be add to self.unsend_notify. This func will check if any and try to send.
+        '''
         while True:
             if self.child.closed:
                 return
@@ -110,7 +112,6 @@ class Ping_logger(Amari_logger):
         }
 
     def check_if_latency_higher_than_criteria(self, latency, counter):
-        # if latency is higher than criteria than send line notify
         if self.notify_cap and latency > self.notify_cap:
             msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n'\
                 f'got a RTT value from {self.ip} higher than {self.notify_cap} ms.\n'\
@@ -126,9 +127,10 @@ class Ping_logger(Amari_logger):
                                     logfile=self.stdout_log_object)
 
         # start notify check on background after child process is established
-        self.thread_check_notify = threading.Thread(
-            target=self.check_unsend_notify_and_try_send, args=([]))
-        self.thread_check_notify.start()
+        if self.will_send_notify:
+            self.thread_check_notify = threading.Thread(
+                target=self.check_unsend_notify_and_try_send, args=([]))
+            self.thread_check_notify.start()
 
         counter = 0
         while True:
@@ -192,7 +194,9 @@ if __name__ == '__main__':
                         help='type of service value')
     parser.add_argument('-t', '--exec_secs', default=0, type=int,
                         help='time duration (secs)')
-    parser.add_argument('-n', '--notify_cap', default=0, type=int,
+    parser.add_argument('-n', '--notify', action="store_true",
+                        help='send notify if target cannot be reached or latency is higher than user defined')
+    parser.add_argument('-N', '--notify_cap', default=0, type=int,
                         help='latency value cap to notify (millisecs)')
     parser.add_argument('-i', '--interval', default=1, type=int,
                         help='interval between packets')
@@ -201,7 +205,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    logger = Ping_logger(args.host, args.tos, args.exec_secs,
+    logger = Ping_logger(args.host, args.tos, args.exec_secs, args.notify,
                          args.notify_cap, args.interval, args.label)
 
     try:
