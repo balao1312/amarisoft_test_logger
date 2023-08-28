@@ -82,16 +82,21 @@ class Ping_logger(Amari_logger):
         print('-'*80)
         self.stdout_log_object.write(f'ping cmd: {self.cmd}\n{"-"*80}\n')
 
-    def check_notify_msg_and_send(self):
-        # TODO: send notify in another thread
-        if not self.is_with_internet:
-            return
-        if self.unsent_notify:
-            print(f'==> Find {len(self.unsent_notify)} unsend notify before, try sending...')
-            for each_msg in self.unsent_notify:
-                if not self.send_line_notify('balao', each_msg):
-                    self.unsent_notify.remove(each_msg)
-        return
+    def check_unsend_notify_and_try_send(self):
+        while True:
+            if self.child.closed:
+                return
+            if not self.is_with_internet:
+                sleep(5)
+                continue
+            if self.unsent_notify:
+                print(
+                    f'==> Find {len(self.unsent_notify)} unsend notify before, try sending...')
+                for each_msg in self.unsent_notify:
+                    if not self.send_line_notify('balao', each_msg):
+                        self.unsent_notify.remove(each_msg)
+                    sleep(1)
+            sleep(5)
 
     def gen_influx_format(self, record_time, latency):
         return {
@@ -104,18 +109,27 @@ class Ping_logger(Amari_logger):
             'fields': {'RTT': latency}
         }
 
-    def run(self):
-        # start notify check on background
-        self.thread_check_notify = threading.Thread(
-            target=self.check_notify_msg_and_send, args=([]))
-        self.thread_check_notify.start()
+    def check_if_latency_higher_than_criteria(self, latency, counter):
+        # if latency is higher than criteria than send line notify
+        if self.notify_cap and latency > self.notify_cap:
+            msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n'\
+                f'got a RTT value from {self.ip} higher than {self.notify_cap} ms.\n'\
+                f'value: {latency} ms.\nSeq: {counter}'
+            self.unsent_notify.append(msg)
 
+    def run(self):
         self.refresh_log_file()
         self.parse_args_to_string()
         sleep(1)
 
         self.child = pexpect.spawnu(self.cmd, timeout=10,
                                     logfile=self.stdout_log_object)
+
+        # start notify check on background after child process is established
+        self.thread_check_notify = threading.Thread(
+            target=self.check_unsend_notify_and_try_send, args=([]))
+        self.thread_check_notify.start()
+
         counter = 0
         while True:
             try:
@@ -140,48 +154,34 @@ class Ping_logger(Amari_logger):
                     self.unsent_notify.append(msg)
                     self.is_disconnected = False
 
-                # send notify when latency is higher then user defined
-                # TODO: func it
-                if self.notify_cap and latency > self.notify_cap:
-                    msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\ngot a RTT from {self.ip} greater than {self.notify_cap} ms.\nvalue: {latency} ms.\nSeq: {counter}'
-                    thread_1 = threading.Thread(
-                        target=self.send_line_notify, args=('balao', msg))
-                    thread_1.start()
-                
-                self.check_notify_msg_and_send()
+                self.check_if_latency_higher_than_criteria(latency, counter)
 
             except (ValueError, IndexError):
                 # deal with no reply
                 if self.prompt_when_no_reply in line:
                     self.ping_no_return_count += 1
+                    counter += 1
                     print('.', end='')
-                
+
                 # if more than 5 packet lost back to back,than consider it disconnected.
                 if self.ping_no_return_count > 5:
                     self.is_disconnected = True
                     print(
-                        f'\n==> ICMP packets are not returned. Target IP:{self.ip} cannot be reached. ')
+                        f'\n==> ICMP packets are not returned. Target IP: {self.ip} cannot be reached. ')
 
-                    # Send line notify and deal with if there is no internet
+                    # Send line notify
                     msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, 5G connection Lost! Cannot reach {self.ip}. Check connection!'
-                    if self.send_line_notify('balao', msg):
-                        self.unsent_notify.append(msg)
+                    self.unsent_notify.append(msg)
 
                     # if stay disconnected, will notify again after 1hr
                     self.ping_no_return_count = -3595
-                    # SElf.line_msg_unsent.append(f'{datetime.now()} Connection lost.')
-                    # self.send_attempt += 1
-                    # print(f'==> Notify send attempt for {self.send_attempt} times failed, store to buffer for trying larer.\n')
-                    # print(self.line_msg_unsent)
+
             except pexpect.exceptions.EOF as e:
                 print('==> got EOF, ended.')
-                # self.check_notify_msg_and_send()
                 self.stdout_log_object.close()
                 break
         self.clean_buffer_and_send()
-
         self.child.close()
-        # self.thread_check_notify.join()
 
 
 if __name__ == '__main__':
