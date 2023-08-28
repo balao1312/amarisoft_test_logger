@@ -16,7 +16,7 @@ import signal
 
 class Ping_logger(Amari_logger):
 
-    def __init__(self, ip, tos, exec_secs, notify, notify_cap, interval, label):
+    def __init__(self, ip, tos, exec_secs, notify, notify_cap, interval, label, project_field_name):
         super().__init__()
         self.ip = ip
         self.tos = tos
@@ -28,6 +28,7 @@ class Ping_logger(Amari_logger):
         self.unsent_notify = []
         self.ping_no_return_count = 0
         self.is_disconnected = False
+        self.project_field_name = project_field_name
 
     def refresh_log_file(self):
         self.log_file = self.log_folder.joinpath(
@@ -77,6 +78,8 @@ class Ping_logger(Amari_logger):
 
         print(f'==> send line notify: {self.will_send_notify}')
         print(f'==> influxdb label used: {self.label}')
+        if self.project_field_name:
+            print(f'==> project field name: {self.project_field_name}')
         print(f'==> cmd send: \n\t\t{self.cmd}\n')
         print('-'*80)
         self.stdout_log_object.write(f'ping cmd: {self.cmd}\n{"-"*80}\n')
@@ -95,7 +98,8 @@ class Ping_logger(Amari_logger):
                 print(
                     f'==> Find {len(self.unsent_notify)} unsend notify before, try sending...')
                 for each_msg in self.unsent_notify:
-                    if not self.send_line_notify('balao', each_msg):
+                    msg_with_projectf_field_name = f'\n{self.project_field_name}\n{each_msg}'
+                    if not self.send_line_notify('balao', msg_with_projectf_field_name):
                         self.unsent_notify.remove(each_msg)
                     sleep(1)
             sleep(5)
@@ -205,11 +209,13 @@ if __name__ == '__main__':
                         help='interval between packets')
     parser.add_argument('-l', '--label', metavar='', default='none', type=str,
                         help='data label')
+    parser.add_argument('-F', '--project_field_name', metavar='', default='', type=str,
+                        help='data label')
 
     args = parser.parse_args()
 
     logger = Ping_logger(args.host, args.tos, args.exec_secs, args.notify,
-                         args.notify_cap, args.interval, args.label)
+                         args.notify_cap, args.interval, args.label, args.project_field_name)
 
     try:
         logger.run()
