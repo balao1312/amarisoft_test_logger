@@ -9,9 +9,8 @@ from copy import copy
 from amari_logger import Amari_logger
 import argparse
 import threading
-import requests
 import pexpect
-import signal
+import shlex
 
 
 class Ping_logger(Amari_logger):
@@ -51,11 +50,17 @@ class Ping_logger(Amari_logger):
 
     @property
     def is_with_internet(self):
-        try:
-            response = requests.get("https://google.com", timeout=5)
-            return True
-        except (requests.ConnectionError, requests.ReadTimeout):
+        if self.platform == 'Darwin':
+            cmd = 'ping -c 1 -W 2000 google.com'
+        elif self.platform == 'Linux':
+            cmd = 'ping -c 1 -W 2 google.com'
+        result = subprocess.run(shlex.split(
+            cmd), stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+
+        if result.returncode:
             return False
+        else:
+            return True
 
     def parse_args_to_string(self):
         if self.platform == 'Darwin':
