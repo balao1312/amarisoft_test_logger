@@ -11,6 +11,7 @@ import argparse
 import threading
 import pexpect
 import shlex
+import statistics
 
 
 class Ping_logger(Amari_logger):
@@ -28,6 +29,7 @@ class Ping_logger(Amari_logger):
         self.ping_no_return_count = 0
         self.is_disconnected = False
         self.project_field_name = project_field_name
+        self.all_latency_values = []
 
     def refresh_log_file(self):
         self.log_file = self.log_folder.joinpath(
@@ -129,13 +131,36 @@ class Ping_logger(Amari_logger):
                 f'got a RTT value from {self.ip} higher than {self.notify_cap} ms.\n'\
                 f'value: {latency} ms.\nSeq: {counter}'
             self.unsent_notify.append(msg)
-    
+
     def show_every_sec_result(self, counter, latency):
         msg = f'{counter}: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, '\
-        f'dst: {self.ip}, '\
-        f'label: {self.label}, '\
-        f'latency: {latency} ms'
+            f'dst: {self.ip}, '\
+            f'label: {self.label}, '\
+            f'latency: {latency} ms'
         print(msg)
+
+    def write_summary_to_stdout_file(self):
+        '''
+        --- 8.8.8.8 ping statistics ---
+        5 packets transmitted, 5 received, 0% packet loss, time 4074ms
+        rtt min/avg/max/mdev = 0.729/0.770/0.909/0.071 ms
+        '''
+
+        lost_rate = ((self.counter - len(self.all_latency_values)
+                      ) / self.counter) * 100
+        summary_min = min(self.all_latency_values)
+        summary_max = max(self.all_latency_values)
+        summary_avg = sum(self.all_latency_values) / \
+            len(self.all_latency_values)
+
+        summary_string = f'''
+--- {self.ip} ping statistics ---
+{self.counter} packets transmitted, {len(self.all_latency_values)} received, {lost_rate:.4f}% packet loss
+rtt min/avg/max/mdev = {summary_min}/{summary_avg:.3f}/{summary_max}/{statistics.pstdev(self.all_latency_values):.3f} ms
+'''
+        print(summary_string)
+        with open(self.stdout_log_file, 'a') as f:
+            f.write(summary_string)
 
     def run(self):
         self.refresh_log_file()
@@ -152,7 +177,7 @@ class Ping_logger(Amari_logger):
                 target=self.check_unsend_notify_and_try_send, args=([]))
             self.thread_check_notify.start()
 
-        counter = 0
+        self.counter = 0
         while True:
             try:
                 self.child.expect('\n')
@@ -169,7 +194,7 @@ class Ping_logger(Amari_logger):
                 # deal with no reply
                 if self.prompt_when_no_reply in line:
                     self.ping_no_return_count += 1
-                    counter += 1
+                    self.counter += 1
                     print('.', end='')
 
                 # if more than 5 packet lost back to back,than consider it disconnected.
@@ -187,12 +212,14 @@ class Ping_logger(Amari_logger):
                 continue
 
             record_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-            counter += 1
-            
-            self.show_every_sec_result(counter, latency)
+            self.counter += 1
+
+            self.show_every_sec_result(self.counter, latency)
 
             data = self.gen_influx_format(record_time, latency)
             self.logging_with_buffer(data)
+
+            self.all_latency_values.append(latency)
 
             # for notify, reset to 0, for only 5 secs to start notify if disconnect happens again
             self.ping_no_return_count = 0
@@ -203,7 +230,7 @@ class Ping_logger(Amari_logger):
                 self.unsent_notify.append(msg)
                 self.is_disconnected = False
 
-            self.check_if_latency_higher_than_criteria(latency, counter)
+            self.check_if_latency_higher_than_criteria(latency, self.counter)
 
         self.clean_buffer_and_send()
         self.child.close()
@@ -238,6 +265,7 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         with open(logger.stdout_log_file, 'a') as f:
             f.write('==> Get Ctrl+C.\n')
+        logger.write_summary_to_stdout_file()
         logger.stdout_log_object.close()
 
         # TODO: show statistics
