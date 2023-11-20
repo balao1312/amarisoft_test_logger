@@ -16,7 +16,7 @@ import statistics
 
 class Ping_logger(Amari_logger):
 
-    def __init__(self, ip, tos, exec_secs, notify, notify_cap, interval, label, project_field_name):
+    def __init__(self, ip, tos, exec_secs, notify, notify_cap, interval, label, project_field_name, dont_send_to_db):
         super().__init__()
         self.ip = ip
         self.tos = tos
@@ -30,6 +30,7 @@ class Ping_logger(Amari_logger):
         self.is_disconnected = False
         self.project_field_name = project_field_name
         self.all_latency_values = []
+        self.is_send_to_db = not dont_send_to_db
 
     def refresh_log_file(self):
         self.log_file = self.log_folder.joinpath(
@@ -238,33 +239,35 @@ rtt min/avg/max/mdev = {summary_min}/{summary_avg:.3f}/{summary_max}/{statistics
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--host', required=True,
+    parser.add_argument('-c', '--host', required=True, metavar='',
                         type=str, help='destination ip')
-    parser.add_argument('-Q', '--tos', default=0, type=int,
+    parser.add_argument('-Q', '--tos', default=0, type=int, metavar='',
                         help='type of service value')
-    parser.add_argument('-t', '--exec_secs', default=0, type=int,
+    parser.add_argument('-t', '--exec_secs', default=0, type=int, metavar='',
                         help='time duration (secs)')
+    parser.add_argument('-N', '--notify_cap', default=0, type=int, metavar='',
+                        help='latency value cap to notify (millisecs)')
+    parser.add_argument('-i', '--interval', default=1, type=int, metavar='',
+                        help='interval between packets')
+    parser.add_argument('-l', '--label', default='none', type=str, metavar='',
+                        help='record label in db')
+    parser.add_argument('-F', '--project_field_name', default='', type=str, metavar='',
+                        help='project field name for notify lable')
     parser.add_argument('-n', '--notify', action="store_true",
                         help='send notify if target cannot be reached or latency is higher than user defined')
-    parser.add_argument('-N', '--notify_cap', default=0, type=int,
-                        help='latency value cap to notify (millisecs)')
-    parser.add_argument('-i', '--interval', default=1, type=int,
-                        help='interval between packets')
-    parser.add_argument('-l', '--label', metavar='', default='none', type=str,
-                        help='data label')
-    parser.add_argument('-F', '--project_field_name', metavar='', default='', type=str,
-                        help='data label')
+    parser.add_argument('-u', '--dont_send_to_db', action="store_true",
+                        help='disable sending record to db')
 
     args = parser.parse_args()
 
     logger = Ping_logger(args.host, args.tos, args.exec_secs, args.notify,
-                         args.notify_cap, args.interval, args.label, args.project_field_name)
+                         args.notify_cap, args.interval, args.label, args.project_field_name, args.dont_send_to_db)
 
     try:
         logger.run()
     except KeyboardInterrupt:
         with open(logger.stdout_log_file, 'a') as f:
-            f.write('==> Get Ctrl+C.\n')
+            f.write('==> Got Ctrl+C.\n')
         logger.write_summary_to_stdout_file()
         logger.stdout_log_object.close()
         logger.clean_buffer_and_send()
