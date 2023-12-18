@@ -17,8 +17,7 @@ class Amari_logger:
     try:
         from influxdb import InfluxDBClient
     except ModuleNotFoundError:
-        print('\n==> module influxdb is not found, send to db function is disabled.')
-        time.sleep(2)
+        print('\n==> module influxdb is not found, send to db function is disabled.\n')
         is_send_to_db = False
 
     # check if credential exists
@@ -57,7 +56,6 @@ class Amari_logger:
 
         if self.is_send_to_db:
             print(f'\n==> database used in influxdb: {self.influxdb_dbname}')
-            time.sleep(2)
 
     def send_line_notify(self, dst, msg):
         def lineNotifyMessage(line_token, msg):
@@ -79,7 +77,7 @@ class Amari_logger:
         print('==> trying send notify ...')
 
         try:
-            lineNotifyMessage(token, msg) 
+            lineNotifyMessage(token, msg)
             print('==> Notify sent.')
             return 0
         except Exception as e:

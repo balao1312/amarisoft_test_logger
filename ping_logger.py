@@ -32,6 +32,24 @@ class Ping_logger(Amari_logger):
         self.all_latency_values = []
         self.is_send_to_db = not dont_send_to_db
 
+        self.display_all_option()
+
+    def turn_to_form(self, a, b):
+        return f'| {a:<50}| {b:<85}|\n{"-" * 140}'
+
+    def display_all_option(self):
+        print('-' * 140)
+        print(self.turn_to_form('target ip', self.ip))
+        print(self.turn_to_form('execute times(secs)', self.exec_secs))
+        # print(turn_to_form('TOS, type of service value', self.tos))
+        # print(turn_to_form('interval between packets', self.interval))
+        print(self.turn_to_form('send nofify', str(bool(self.will_send_notify))))
+        print(self.turn_to_form(
+            'latency value cap to notify (millisecs)', self.notify_cap))
+        print(self.turn_to_form('send data to db', str(bool(self.is_send_to_db))))
+        print(self.turn_to_form('data label in db', self.label))
+        print(self.turn_to_form('project field name', self.project_field_name))
+
     def refresh_log_file(self):
         self.log_file = self.log_folder.joinpath(
             f'log_ping_{datetime.now().date()}')
@@ -41,8 +59,8 @@ class Ping_logger(Amari_logger):
         self.stdout_log_object.write(
             f'\n\n{"-"*80}\nNew session starts at: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n')
 
-        print(
-            f'==> ping stdout will be logged to: {self.stdout_log_file}.txt')
+        print(self.turn_to_form(
+            'ping stdout will be saved to', str(self.stdout_log_file)))
 
     @property
     def platform(self):
@@ -84,13 +102,6 @@ class Ping_logger(Amari_logger):
                    f'{exec_secs_string}'\
                    f'{interval_string}'
 
-        print(f'==> influxdb label used: {self.label}')
-        print(f'==> send line notify: {self.will_send_notify}')
-        if self.notify_cap:
-            print(
-                f'==> send notify when latency is higher than: {self.notify_cap} ms')
-        if self.project_field_name:
-            print(f'==> project field name: {self.project_field_name}')
         print(f'==> cmd send: \n\t\t{self.cmd}\n')
         print('-'*80)
         self.stdout_log_object.write(f'ping cmd: {self.cmd}\n{"-"*80}\n')
