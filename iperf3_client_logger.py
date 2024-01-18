@@ -14,7 +14,7 @@ import pexpect
 
 class Iperf3_logger(Amari_logger):
 
-    def __init__(self, host, port, tos, bitrate, reverse, udp, duration, buffer_length, window, parallel, set_mss, label):
+    def __init__(self, host, port, tos, bitrate, reverse, udp, duration, buffer_length, window, parallel, set_mss, label, project_field_name):
         super().__init__()
         self.host = host
         self.tos = tos
@@ -28,11 +28,36 @@ class Iperf3_logger(Amari_logger):
         self.parallel = parallel
         self.set_mss = set_mss
         self.label = label
+        self.project_field_name = project_field_name
 
         # define RE patterns
         self.average_pattern = re.compile(r'.*(sender|receiver)')
         self.sum_parallel_pattern = re.compile(
             r'^\[SUM\].*\ ([0-9.]*)\ Mbits\/sec')
+
+        self.display_all_option()
+
+    def display_all_option(self):
+        print('-' * 140)
+        print(self.turn_to_form('target ip', self.host))
+        print(self.turn_to_form('execute times(secs)', self.duration))
+        print(self.turn_to_form('port', self.port))
+        print(self.turn_to_form('TOS, type of service value', self.tos))
+        print(self.turn_to_form('bitrate', self.bitrate))
+        print(self.turn_to_form('reverse', str(bool(self.reverse))))
+        print(self.turn_to_form('UDP', str(bool(self.udp))))
+        print(self.turn_to_form('buffer_lenth', self.buffer_length))
+        print(self.turn_to_form('window', self.window))
+        print(self.turn_to_form('Parallel', self.parallel))
+        print(self.turn_to_form('set_mss', self.set_mss))
+        # TODO feat:notify
+        # print(self.turn_to_form('send nofify', str(bool(self.will_send_notify))))
+        print(self.turn_to_form('send data to db', str(bool(self.is_send_to_db))))
+        print(self.turn_to_form('data label in db', self.label))
+        print(self.turn_to_form('project field name', self.project_field_name))
+
+    def turn_to_form(self, a, b):
+        return f'| {a:<50}| {b:<85}|\n{"-" * 140}'
 
     def refresh_log_file(self):
         self.log_file = self.log_folder.joinpath(
@@ -99,9 +124,10 @@ class Iperf3_logger(Amari_logger):
         }
 
     def run(self):
+        if input('Please confirm info above and press enter to continue.\n') != '':
+            return
         self.refresh_log_file()
         self.parse_args_to_string()
-        sleep(1)
 
         child = pexpect.spawnu(self.cmd, timeout=10,
                                logfile=self.stdout_log_object)
@@ -170,6 +196,8 @@ if __name__ == '__main__':
                         help='reverse to downlink from server')
     parser.add_argument('-L', '--label', metavar='', default='none', type=str,
                         help='data label')
+    parser.add_argument('-F', '--project_field_name', metavar='', default="", type=str,
+                        help='Name of the project field')
 
     args = parser.parse_args()
 
@@ -185,7 +213,8 @@ if __name__ == '__main__':
         window=args.window,
         parallel=args.parallel,
         set_mss=args.set_mss,
-        label=args.label
+        label=args.label,
+        project_field_name=args.project_field_name
     )
 
     try:
