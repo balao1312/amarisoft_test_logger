@@ -132,6 +132,7 @@ class Iperf3_logger(Amari_logger):
         child = pexpect.spawnu(self.cmd, timeout=10,
                                logfile=self.stdout_log_object)
 
+        zero_counter = 0
         counter = 0
         while True:
             try:
@@ -159,6 +160,14 @@ class Iperf3_logger(Amari_logger):
 
                 data = self.gen_influx_format(record_time, mbps)
                 self.logging_with_buffer(data)
+
+                if mbps == 0:
+                    zero_counter += 1
+                    if zero_counter == 180:
+                        print('Can\'t get result after 60 secs, stopped.')
+                        break
+                else: 
+                    zero_counter = 0
 
             except pexpect.exceptions.EOF as e:
                 print('==> got EOF, ended.')
