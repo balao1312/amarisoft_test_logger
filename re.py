@@ -144,7 +144,7 @@ class Resources_logger(Amari_logger):
 
         data = {
             'measurement': 'amari_resources',
-            'tags': {'server': self.server_name},
+            'tags': {'device': self.server_name},
             'time': record_time,
             'fields': {
                 'cpu_usage': float(cpu_1m),
