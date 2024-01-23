@@ -164,7 +164,7 @@ class Iperf3_logger(Amari_logger):
                 if mbps == 0:
                     zero_counter += 1
                     if zero_counter == 180:
-                        print('Can\'t get result after 60 secs, stopped.')
+                        print('Can\'t get result for a while, stopped.')
                         break
                 else: 
                     zero_counter = 0
