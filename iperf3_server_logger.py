@@ -47,7 +47,8 @@ class Iperf3_logger(Amari_logger):
         self.cmd = f'iperf3 -s -p {self.port} -f m'
 
         print(f'==> cmd send: \n\n\t{self.cmd}\n')
-        print(f'==> parallel mode: {self.is_in_parallel_mode}, ******* check this arg or the result would be wrong!')
+        print(
+            f'==> parallel mode: {self.is_in_parallel_mode}, ******* check this arg or the result would be wrong!')
         print(f'==> notify when terminated: {self.notify_when_terminated}')
         print(f'==> influxdb label used: {self.label}')
         self.stdout_log_object.write(f'iperf3 cmd: {self.cmd}\n{"-"*80}\n')
@@ -69,14 +70,10 @@ class Iperf3_logger(Amari_logger):
             'fields': {'Mbps': mbps}
         }
 
-    def run(self):
-        self.refresh_log_file()
-        self.parse_args_to_string()
-        sleep(1)
-
+    def run_iperf3_session(self):
         child = pexpect.spawnu(self.cmd, timeout=60,
                                logfile=self.stdout_log_object)
-
+        zero_counter = 0
         counter = 0
         while True:
             try:
@@ -116,6 +113,13 @@ class Iperf3_logger(Amari_logger):
                 data = self.gen_influx_format(record_time, mbps)
                 self.logging_with_buffer(data)
 
+                if mbps == 0:
+                    zero_counter += 1
+                    if zero_counter == 180:
+                        print(
+                            '\n==> Can\'t get result from client for 3 mins, stopped.(Disconnecion may be the reason.)\n')
+                        break
+
             except pexpect.TIMEOUT as e:
                 # print('==> pexpect timeout.')
                 pass
@@ -130,6 +134,14 @@ class Iperf3_logger(Amari_logger):
                 # skip iperf stdout that DONT contain throughput lines
                 pass
         self.clean_buffer_and_send()
+        return
+
+    def run(self):
+        self.refresh_log_file()
+        self.parse_args_to_string()
+        while True:
+            self.run_iperf3_session()
+            sleep(1)
 
 
 if __name__ == '__main__':

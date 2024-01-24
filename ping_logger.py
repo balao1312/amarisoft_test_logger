@@ -35,10 +35,10 @@ class Ping_logger(Amari_logger):
         self.display_all_option()
 
     def turn_to_form(self, a, b):
-        return f'| {a:<50}| {b:<85}|\n{"-" * 140}'
+        return f'| {a:<50}| {b:<85}|\n{"-" * 120}'
 
     def display_all_option(self):
-        print('-' * 140)
+        print('-' * 120)
         print(self.turn_to_form('target ip', self.ip))
         print(self.turn_to_form('execute times(secs)', self.exec_secs))
         # print(turn_to_form('TOS, type of service value', self.tos))

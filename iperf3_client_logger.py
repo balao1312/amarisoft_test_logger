@@ -10,11 +10,14 @@ from amari_logger import Amari_logger
 import argparse
 import re
 import pexpect
+import subprocess
+import shlex
+import signal
 
 
 class Iperf3_logger(Amari_logger):
 
-    def __init__(self, host, port, tos, bitrate, reverse, udp, duration, buffer_length, window, parallel, set_mss, label, project_field_name):
+    def __init__(self, host, port, tos, bitrate, reverse, udp, duration, buffer_length, window, parallel, set_mss, label, project_field_name, is_try_restart):
         super().__init__()
         self.host = host
         self.tos = tos
@@ -29,6 +32,7 @@ class Iperf3_logger(Amari_logger):
         self.set_mss = set_mss
         self.label = label
         self.project_field_name = project_field_name
+        self.is_try_restart = is_try_restart
 
         # define RE patterns
         self.average_pattern = re.compile(r'.*(sender|receiver)')
@@ -38,7 +42,7 @@ class Iperf3_logger(Amari_logger):
         self.display_all_option()
 
     def display_all_option(self):
-        print('-' * 140)
+        print('-' * 120)
         print(self.turn_to_form('target ip', self.host))
         print(self.turn_to_form('execute times(secs)', self.duration))
         print(self.turn_to_form('port', self.port))
@@ -55,9 +59,10 @@ class Iperf3_logger(Amari_logger):
         print(self.turn_to_form('send data to db', str(bool(self.is_send_to_db))))
         print(self.turn_to_form('data label in db', self.label))
         print(self.turn_to_form('project field name', self.project_field_name))
+        print(self.turn_to_form('try restart', str(bool(self.is_try_restart))))
 
     def turn_to_form(self, a, b):
-        return f'| {a:<50}| {b:<85}|\n{"-" * 140}'
+        return f'| {a:<30}| {b:<85}|\n{"-" * 120}'
 
     def refresh_log_file(self):
         self.log_file = self.log_folder.joinpath(
@@ -123,15 +128,43 @@ class Iperf3_logger(Amari_logger):
             'fields': {'Mbps': mbps}
         }
 
-    def run(self):
-        if input('Please confirm info above and press enter to continue.\n') != '':
-            return
-        self.refresh_log_file()
-        self.parse_args_to_string()
+    @property
+    def platform(self):
+        cmd = 'uname'
+        result = subprocess.check_output(
+            [cmd], stderr=subprocess.STDOUT).decode('utf8').strip()
+        return result
+
+    def wait_until_connection_is_back(self):
+        sleep(2)
+        print(
+            f'\n==> trying to check iperf3 server to know whether connection is back or not...')
+
+        if self.platform == 'Darwin':
+            # cmd = f'ping -c 1 -W 2000 {self.host}'
+            cmd = f'nc -vz -w 2 {self.host} {self.port}'
+        elif self.platform == 'Linux':
+            # cmd = f'ping -c 1 -W 2 {self.host}'
+            cmd = f'nc -vz -w 2 {self.host} {self.port}'
+
+        while True:
+            result = subprocess.run(shlex.split(
+                cmd), stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+
+            if result.returncode:
+                print('.', end='')
+                sleep(1)
+            else:
+                print(f'\n==> Connection is back, keep iperfing.\n')
+                break
+        return
+
+    def run_iperf3_session(self):
+        print('==> Start iperf3 session...')
+        sleep(2)
 
         child = pexpect.spawnu(self.cmd, timeout=10,
                                logfile=self.stdout_log_object)
-
         zero_counter = 0
         counter = 0
         while True:
@@ -164,19 +197,38 @@ class Iperf3_logger(Amari_logger):
                 if mbps == 0:
                     zero_counter += 1
                     if zero_counter == 180:
-                        print('Can\'t get result for a while, stopped.')
+                        print(
+                            '\n==> Can\'t get result from server for 3 mins, stopped.(Disconnecion may be the reson)\n')
                         break
-                else: 
+                else:
                     zero_counter = 0
 
             except pexpect.exceptions.EOF as e:
-                print('==> got EOF, ended.')
+                print('==> got an EOF, ended. Please check the iperf3 server.')
                 self.stdout_log_object.close()
                 break
-            except (ValueError, IndexError):
+            except (ValueError, IndexError) as e:
+                # print(e)
                 # skip iperf stdout that DONT contain throughput lines
                 pass
+
         self.clean_buffer_and_send()
+        return
+
+    def run(self):
+        if input('Please confirm info above and press enter to continue.\n') != '':
+            return
+        self.refresh_log_file()
+        self.parse_args_to_string()
+        self.run_iperf3_session()
+
+        if self.is_try_restart:
+            while True:
+                self.refresh_log_file()
+                self.parse_args_to_string()
+                self.wait_until_connection_is_back()
+                self.run_iperf3_session()
+                sleep(3)
 
 
 if __name__ == '__main__':
@@ -207,6 +259,8 @@ if __name__ == '__main__':
                         help='data label')
     parser.add_argument('-F', '--project_field_name', metavar='', default="", type=str,
                         help='Name of the project field')
+    parser.add_argument('-T', '--is_try_restart', action="store_true",
+                        help='try to restart iperf session when server is available')
 
     args = parser.parse_args()
 
@@ -223,7 +277,8 @@ if __name__ == '__main__':
         parallel=args.parallel,
         set_mss=args.set_mss,
         label=args.label,
-        project_field_name=args.project_field_name
+        project_field_name=args.project_field_name,
+        is_try_restart=args.is_try_restart
     )
 
     try:
