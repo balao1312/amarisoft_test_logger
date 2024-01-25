@@ -17,7 +17,7 @@ import signal
 
 class Iperf3_logger(Amari_logger):
 
-    def __init__(self, host, port, tos, bitrate, reverse, udp, duration, buffer_length, window, parallel, set_mss, label, project_field_name, is_try_restart):
+    def __init__(self, host, port, tos, bitrate, reverse, udp, duration, buffer_length, window, parallel, set_mss, label, project_field_name, is_try_restart, dont_send_to_db):
         super().__init__()
         self.host = host
         self.tos = tos
@@ -33,6 +33,7 @@ class Iperf3_logger(Amari_logger):
         self.label = label
         self.project_field_name = project_field_name
         self.is_try_restart = is_try_restart
+        self.dont_send_to_db = dont_send_to_db
 
         # define RE patterns
         self.average_pattern = re.compile(r'.*(sender|receiver)')
@@ -56,7 +57,7 @@ class Iperf3_logger(Amari_logger):
         print(self.turn_to_form('set_mss', self.set_mss))
         # TODO feat:notify
         # print(self.turn_to_form('send nofify', str(bool(self.will_send_notify))))
-        print(self.turn_to_form('send data to db', str(bool(self.is_send_to_db))))
+        print(self.turn_to_form('send data to db', str(bool(not self.dont_send_to_db))))
         print(self.turn_to_form('data label in db', self.label))
         print(self.turn_to_form('project field name', self.project_field_name))
         print(self.turn_to_form('try restart', str(bool(self.is_try_restart))))
@@ -191,8 +192,9 @@ class Iperf3_logger(Amari_logger):
 
                 self.show_progress(counter, mbps)
 
-                data = self.gen_influx_format(record_time, mbps)
-                self.logging_with_buffer(data)
+                if not self.dont_send_to_db:
+                    data = self.gen_influx_format(record_time, mbps)
+                    self.logging_with_buffer(data)
 
                 if mbps == 0:
                     zero_counter += 1
@@ -216,6 +218,7 @@ class Iperf3_logger(Amari_logger):
         return
 
     def run(self):
+        # TODO fix cmd send confirm msg show everytime when restart session
         if input('Please confirm info above and press enter to continue.\n') != '':
             return
         self.refresh_log_file()
@@ -261,6 +264,8 @@ if __name__ == '__main__':
                         help='Name of the project field')
     parser.add_argument('-T', '--is_try_restart', action="store_true",
                         help='try to restart iperf session when server is available')
+    parser.add_argument('-U', '--dont_send_to_db', action="store_true",
+                        help='disable sending record to db')
 
     args = parser.parse_args()
 
@@ -278,7 +283,8 @@ if __name__ == '__main__':
         set_mss=args.set_mss,
         label=args.label,
         project_field_name=args.project_field_name,
-        is_try_restart=args.is_try_restart
+        is_try_restart=args.is_try_restart,
+        dont_send_to_db=args.dont_send_to_db
     )
 
     try:
@@ -300,3 +306,4 @@ if __name__ == '__main__':
             sys.exit(0)
         except SystemExit:
             os._exit(0)
+

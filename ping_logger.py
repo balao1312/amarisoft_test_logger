@@ -266,7 +266,7 @@ if __name__ == '__main__':
                         help='project field name for notify lable')
     parser.add_argument('-n', '--notify', action="store_true",
                         help='send notify if target cannot be reached or latency is higher than user defined')
-    parser.add_argument('-u', '--dont_send_to_db', action="store_true",
+    parser.add_argument('-U', '--dont_send_to_db', action="store_true",
                         help='disable sending record to db')
 
     args = parser.parse_args()

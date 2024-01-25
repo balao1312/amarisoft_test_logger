@@ -14,12 +14,13 @@ import threading
 
 class Iperf3_logger(Amari_logger):
 
-    def __init__(self, port, parallel, notify, label):
+    def __init__(self, port, parallel, notify, label, dont_send_to_db):
         super().__init__()
         self.port = port
         self.is_in_parallel_mode = parallel
         self.notify_when_terminated = notify
         self.label = label
+        self.dont_send_to_db = dont_send_to_db
 
         # define RE patterns
         self.average_pattern = re.compile(r'.*(sender|receiver)')
@@ -110,8 +111,9 @@ class Iperf3_logger(Amari_logger):
                 if self.check_if_is_summary_and_show(line):
                     continue
 
-                data = self.gen_influx_format(record_time, mbps)
-                self.logging_with_buffer(data)
+                if not self.dont_send_to_db:
+                    data = self.gen_influx_format(record_time, mbps)
+                    self.logging_with_buffer(data)
 
                 if mbps == 0:
                     zero_counter += 1
@@ -125,10 +127,7 @@ class Iperf3_logger(Amari_logger):
                 pass
             except pexpect.exceptions.EOF as e:
                 print('==> got EOF, ended.')
-                msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n{self.lable} iperf server got an EOF.'
-                thread_1 = threading.Thread(
-                    target=self.send_line_notify, args=('balao', msg))
-                thread_1.start()
+                print(f'==> Error: {e}')
                 break
             except (ValueError, IndexError):
                 # skip iperf stdout that DONT contain throughput lines
@@ -139,6 +138,7 @@ class Iperf3_logger(Amari_logger):
     def run(self):
         self.refresh_log_file()
         self.parse_args_to_string()
+        # TODO show a table of args to let user confirm
         while True:
             self.run_iperf3_session()
             sleep(1)
@@ -152,8 +152,10 @@ if __name__ == '__main__':
                         help='detect client in parallel mode')
     parser.add_argument('-n', '--notify', action="store_true",
                         help='notify when terminated')
-    parser.add_argument('-l', '--label', metavar='', default='', type=str, required=True,
+    parser.add_argument('-l', '--label', metavar='', default='', type=str,
                         help='data label')
+    parser.add_argument('-U', '--dont_send_to_db', action="store_true",
+                        help='disable sending record to db')
 
     args = parser.parse_args()
 
@@ -161,7 +163,8 @@ if __name__ == '__main__':
         port=args.port,
         parallel=args.parallel,
         notify=args.notify,
-        label=args.label
+        label=args.label,
+        dont_send_to_db=args.dont_send_to_db
     )
 
     try:
