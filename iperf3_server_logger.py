@@ -121,13 +121,15 @@ class Iperf3_logger(Amari_logger):
                         print(
                             '\n==> Can\'t get result from client for 3 mins, stopped.(Disconnecion may be the reason.)\n')
                         break
+                else:
+                    zero_counter = 0
 
             except pexpect.TIMEOUT as e:
                 # print('==> pexpect timeout.')
                 pass
             except pexpect.exceptions.EOF as e:
                 print('==> got EOF, ended.')
-                print(f'==> Error: {e}')
+                # print(f'==> Error: {e}')
                 break
             except (ValueError, IndexError):
                 # skip iperf stdout that DONT contain throughput lines

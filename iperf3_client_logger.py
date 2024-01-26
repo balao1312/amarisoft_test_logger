@@ -47,7 +47,7 @@ class Iperf3_logger(Amari_logger):
         print(self.turn_to_form('target ip', self.host))
         print(self.turn_to_form('execute times(secs)', self.duration))
         print(self.turn_to_form('port', self.port))
-        print(self.turn_to_form('TOS, type of service value', self.tos))
+        # print(self.turn_to_form('TOS, type of service value', self.tos))
         print(self.turn_to_form('bitrate', self.bitrate))
         print(self.turn_to_form('reverse', str(bool(self.reverse))))
         print(self.turn_to_form('UDP', str(bool(self.udp))))
@@ -76,7 +76,7 @@ class Iperf3_logger(Amari_logger):
             f'\n\n{"-"*80}\nNew session starts at: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n')
 
         print(
-            f'==> iperf3 stdout will be logged to: {self.stdout_log_file}.txt')
+            f'==> iperf3 stdout will be logged to: {self.stdout_log_file}')
 
     def parse_args_to_string(self):
         self.tos_string = f' -S {self.tos}' if self.tos else ''
@@ -156,12 +156,12 @@ class Iperf3_logger(Amari_logger):
                 print('.', end='')
                 sleep(1)
             else:
-                print(f'\n==> Connection is back, keep iperfing.\n')
+                print(f'\n==> Connection is back. Try restart iperf session...\n')
                 break
         return
 
     def run_iperf3_session(self):
-        print('==> Start iperf3 session...')
+        print('==> Start iperf3 session...\n')
         sleep(2)
 
         child = pexpect.spawnu(self.cmd, timeout=10,
@@ -200,13 +200,13 @@ class Iperf3_logger(Amari_logger):
                     zero_counter += 1
                     if zero_counter == 180:
                         print(
-                            '\n==> Can\'t get result from server for 3 mins, stopped.(Disconnecion may be the reson)\n')
+                            '\n==> Can\'t get result from server for 3 mins, stopped.(Disconnecion may be the reason)\n')
                         break
                 else:
                     zero_counter = 0
 
             except pexpect.exceptions.EOF as e:
-                print('==> got an EOF, ended. Please check the iperf3 server.')
+                print('==> Got an EOF, ended. Please check the iperf3 server.')
                 self.stdout_log_object.close()
                 break
             except (ValueError, IndexError) as e:
