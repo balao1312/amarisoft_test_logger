@@ -1,46 +1,58 @@
 ## Description
-
-Scrips for connection test result logging to **influxDB** for **Grafana** (visualization).  
-Use **Python** to get real-time output from Linux shell command with buffer design.  
-Result will be log to plain text file and send to database periodically.
+Some Python scrips for monitoring output from native network connection quality measurement tools like "ping", and "iperf3".  
+These scrips will capture real-time output and log to database **influxDB**, and easy to be visualized with **Grafana**.  
+Notify (through the App - Line) when connection quility is meet user customized criteria is supported.
 
 ## Requirements
+- Linux based environment or Macintosh with tool iperf3(version 3.7+) installed  
+- (optional) Influxdb database
+- (optional) Grafana service to visualize
+- (optional) App - Line notify token
 
-- Linux based environment or Macintosh with tool **iperf3(version 3.7+)** installed  
-- Running influxdb server  
-- Grafana service to visualize data in influxdb (optional)
-- Pip3 install -r requirements.txt
+## Install dependencies package
+`$ Pip3 install -r requirements.txt`
 
 ## Usage
 
 * ### ping
-	Test connection latency.  
-	Syntax : `python3 ping_log.py -c host -Q tos -t secs`  
+	Measure connection latency.  
+	Syntax : `python3 ping_logger.py [options like origin iperf3 options]`  
 	Example:
 	
 	```
-	$ python3 ping_log.py -c 8.8.8.8 -Q 4 -t 60
+	$ python3 ping_logger.py -c 8.8.8.8 -Q 4 -t 60
 	```
-	For futher infomation you can  `$ python3 ping_log.py --help` 
+	For futher infomation you can do `$ python3 ping_logger.py --help` 
 	
-* ### iperf  
-	Test connection thoughtput.  
-	Syntax : `python3 iperf3_log.py [options like origin iperf3 options]`  
+* ### iperf3 client  
+	Measure connection thoughtput from client side.  
+	Syntax : `python3 iperf3_client_logger.py [options like origin iperf3 options]`  
 	Example:
 
 	```
-	$ python3 iperf3_log.py -c 192.168.0.50 -t 0 -b 5M -p 5202 -R
+	$ python3 iperf3_client_logger.py -c 192.168.0.50 -t 0 -b 5M -p 5202 -R
 	```
 	
-	For futher infomation you can  `$ python3 iperf3_log.py --help`   
+	For futher infomation you can  `$ python3 iperf3_client_logger.py --help`   
 
-* ### resources
-	Log resources usage of base station computer. (usually put in linux crontab) (linux only)   
-	Syntax : `python3 resources_log.py`  
+* ### iperf3 server
+	Measure connection thoughtput from server side.  
+	Syntax : `python3 iperf3_server_logger.py [options like origin iperf3 options]`  
+	Example:
+
+	```
+	$ python3 iperf3_server_logger.py -s 
+	```
+	
+	For futher infomation you can do  `$ python3 iperf3_logger.py --help`   
+
+* ### resources usage monitor
+	Log basic resources usage of server. (linux only)   
+	Syntax : `python3 resources_logger.py`  
 	example:  
 	
 	```
-	$ python3 resources_log.py
+	$ python3 resources_logger.py
 	```
 	
 * ### parse and send
@@ -74,6 +86,8 @@ db_config = {
 	'influxdb_username': (your influxdb server username),
 	'influxdb_password': (your influxdb server password),
 	'influxdb_dbname': (your database name),
+	'line_notify_token': {
+		(label): (your line notify token)
 }
 ```
   
