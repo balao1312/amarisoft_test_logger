@@ -16,7 +16,7 @@ import signal
 
 class Iperf3_logger(Amari_logger):
 
-    def __init__(self, host, port, tos, bitrate, reverse, udp, duration, buffer_length, window, parallel, set_mss, label, project_field_name, is_try_restart, dont_send_to_db):
+    def __init__(self, host, port, tos, bitrate, reverse, udp, duration, buffer_length, window, parallel, set_mss, label, project_field_name, is_try_restart, dont_send_to_db, is_notify_when_disconnect, notify_dst):
         super().__init__()
         self.host = host
         self.tos = tos
@@ -30,9 +30,11 @@ class Iperf3_logger(Amari_logger):
         self.parallel = parallel
         self.set_mss = set_mss
         self.label = label
-        self.project_field_name = project_field_name  # TODO nofity not using
+        self.project_field_name = project_field_name
         self.is_try_restart = is_try_restart
         self.dont_send_to_db = dont_send_to_db
+        self.is_notify_when_disconnect = is_notify_when_disconnect
+        self.notify_dst = notify_dst
 
         # define RE patterns
         self.average_pattern = re.compile(r'.*(sender|receiver)')
@@ -43,6 +45,7 @@ class Iperf3_logger(Amari_logger):
 
         self.parse_args_to_string()
         self.display_all_option()
+        self.validate_notify_dst()
 
     def display_all_option(self):
         print('\n==> Tool related args:')
@@ -55,7 +58,22 @@ class Iperf3_logger(Amari_logger):
         print(self.turn_to_form('data label in db', self.label))
         print(self.turn_to_form('project field name', self.project_field_name))
         print(self.turn_to_form('try restart', str(bool(self.is_try_restart))))
+        print(self.turn_to_form('notify when disconnect', str(bool(self.is_notify_when_disconnect))))
+        print(self.turn_to_form('notify destination', self.notify_dst))
         print(f'==> original cmd send: \n\n\t{self.cmd}\n')
+
+    def validate_notify_dst(self):
+        if self.can_send_line_notify:
+            if not self.notify_dst:
+                print(
+                    f'==> Waring: Notify destination is not set, notify function is disabled.')
+                self.can_send_line_notify = False
+                return
+            if not self.notify_dst in self.line_notify_dsts:
+                print(
+                    f'\n==> Notify destination "{self.notify_dst}" is not valid, notify function is disabled.\n')
+                self.can_send_line_notify = False
+                return
 
     def turn_to_form(self, a, b):
         return f'| {a:<30}| {b:<85}|\n{"-" * 120}'
@@ -118,6 +136,13 @@ class Iperf3_logger(Amari_logger):
             'fields': {'Mbps': mbps}
         }
 
+    def gen_notify_format(self, msg):
+        return {
+            'project_field_name': self.project_field_name,
+            'dst': self.notify_dst,
+            'msg': msg
+        }
+
     @property
     def platform(self):
         cmd = 'uname'
@@ -148,6 +173,10 @@ class Iperf3_logger(Amari_logger):
                 break
         return
 
+    def validate_to_send_notify(self, msg):
+        if self.can_send_line_notify and self.is_notify_when_disconnect:
+            self.unsend_line_notify_queue.put(self.gen_notify_format(msg))
+
     def send_to_db_on_demend(self, record_time, mbps):
         if not self.dont_send_to_db:
             data = self.gen_influx_format(record_time, mbps)
@@ -158,8 +187,9 @@ class Iperf3_logger(Amari_logger):
         if mbps == 0:
             self.zero_counter += 1
             if self.zero_counter >= 180:
-                print(
-                    '\n==> Can\'t get result from server for 3 mins, session stopped.(Disconnecion may be the reason)\n')
+                print('\n==> Can\'t get result from server for 3 mins, session stopped.(Disconnecion may be the reason)\n')
+                notify_msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\niperf3 client is unable to reach iperf3 server.'
+                self.validate_to_send_notify(notify_msg)
                 return True
         else:
             self.zero_counter = 0
@@ -168,7 +198,7 @@ class Iperf3_logger(Amari_logger):
     def run_iperf3_session(self):
         print('==> Start iperf3 session...\n')
         self.refresh_log_file()
-        sleep(2)
+        sleep(1)
 
         child = pexpect.spawnu(self.cmd, timeout=10,
                                logfile=self.stdout_log_object)
@@ -257,6 +287,10 @@ if __name__ == '__main__':
                         help='try to restart iperf session when server is available')
     parser.add_argument('-U', '--dont_send_to_db', action="store_true",
                         help='disable sending record to db')
+    parser.add_argument('-n', '--is_notify_when_disconnect', action="store_true",
+                        help='notify when terminated')
+    parser.add_argument('-D', '--notify_dst', metavar='', default='', type=str,
+                        help='line notify send destination')
 
     args = parser.parse_args()
 
@@ -275,7 +309,9 @@ if __name__ == '__main__':
         label=args.label,
         project_field_name=args.project_field_name,
         is_try_restart=args.is_try_restart,
-        dont_send_to_db=args.dont_send_to_db
+        dont_send_to_db=args.dont_send_to_db,
+        is_notify_when_disconnect=args.is_notify_when_disconnect,
+        notify_dst=args.notify_dst
     )
 
     try:
