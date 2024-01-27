@@ -93,24 +93,49 @@ class Amari_logger:
             }
 
             payload = {'message': msg}
-            r = requests.post("https://notify-api.line.me/api/notify",
-                              headers=line_headers, params=payload)
-            return r.status_code
+
+            retry_counter = 0
+            while retry_counter < 3:
+                r = requests.post("https://notify-api.line.me/api/notify",
+                                  headers=line_headers, params=payload)
+                if r.status_code == 200:
+                    print('==> Line notify sent.')
+                    return
+                else:
+                    retry_counter += 1
+                    print(f'==> Send notify failed. attempt = {retry_counter}')
+                    sleep(1)
+            # if still send fail then put back to queue
+            self.unsend_line_notify_queue.put(
+                self.parse_line_msg_back_to_queue_object(line_token, msg))
 
         if not self.line_notify_token:
             print(f'==> Unable to send line notify due to no token.')
             return
 
         token = self.line_notify_token[dst]
-        print('==> Trying send line notify ...')
+        print('==> Trying send line notify...')
 
-        try:
-            lineNotifyMessage(token, msg)
-            print('==> Line notify sent.')
-            return
-        except Exception as e:
-            print(f'==> Send notify failed. Cause: {e}. \nmsg: {msg}')
-            return
+        self.thread_send_line_notify = threading.Thread(
+            target=lineNotifyMessage, args=([token, msg]))
+        self.thread_send_line_notify.start()
+
+    def parse_line_msg_back_to_queue_object(self, line_token, str):
+        '''
+        Just for my obsessive-compulsive disorder.
+        When line notify keep sending fail, notify need to be put back to unsend line notify queue,
+        but the notify info has been concatenate to one long string.
+        This function will parse it back to notify format designed.
+        '''
+        dst = list(self.line_notify_token.keys())[
+            list(self.line_notify_token.values()).index(line_token)]
+        project_field_name = str.split('\n')[1][1:-1]
+        msg = '\n'.join(str.split('\n')[2:])
+        return {
+            'project_field_name': project_field_name,
+            'dst': dst,
+            'msg': msg
+        }
 
     def check_unsend_line_notify_and_try_send(self):
         '''
