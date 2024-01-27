@@ -31,36 +31,31 @@ class Iperf3_logger(Amari_logger):
         self.parallel = parallel
         self.set_mss = set_mss
         self.label = label
-        self.project_field_name = project_field_name
+        self.project_field_name = project_field_name  # TODO nofity not using
         self.is_try_restart = is_try_restart
         self.dont_send_to_db = dont_send_to_db
 
         # define RE patterns
         self.average_pattern = re.compile(r'.*(sender|receiver)')
-        self.sum_parallel_pattern = re.compile(
+        self.single_thread_mode_throughput_pattern = re.compile(
+            r'.*\ ([0-9.]*)\ Mbits\/sec')
+        self.multi_threads_mode_throughput_pattern = re.compile(
             r'^\[SUM\].*\ ([0-9.]*)\ Mbits\/sec')
 
+        self.parse_args_to_string()
         self.display_all_option()
 
     def display_all_option(self):
+        print('==> Tool related args:')
         print('-' * 120)
-        print(self.turn_to_form('target ip', self.host))
-        print(self.turn_to_form('execute times(secs)', self.duration))
-        print(self.turn_to_form('port', self.port))
-        # print(self.turn_to_form('TOS, type of service value', self.tos))
-        print(self.turn_to_form('bitrate', self.bitrate))
-        print(self.turn_to_form('reverse', str(bool(self.reverse))))
-        print(self.turn_to_form('UDP', str(bool(self.udp))))
-        print(self.turn_to_form('buffer_lenth', self.buffer_length))
-        print(self.turn_to_form('window', self.window))
-        print(self.turn_to_form('Parallel', self.parallel))
-        print(self.turn_to_form('set_mss', self.set_mss))
         # TODO feat:notify
         # print(self.turn_to_form('send nofify', str(bool(self.will_send_notify))))
-        print(self.turn_to_form('send data to db', str(bool(not self.dont_send_to_db))))
+        print(self.turn_to_form('send data to db',
+              str(bool(not self.dont_send_to_db))))
         print(self.turn_to_form('data label in db', self.label))
         print(self.turn_to_form('project field name', self.project_field_name))
         print(self.turn_to_form('try restart', str(bool(self.is_try_restart))))
+        print(f'==> original cmd send: \n\n\t{self.cmd}\n')
 
     def turn_to_form(self, a, b):
         return f'| {a:<30}| {b:<85}|\n{"-" * 120}'
@@ -73,10 +68,7 @@ class Iperf3_logger(Amari_logger):
         self.stdout_log_object = open(self.stdout_log_file, 'a')
 
         self.stdout_log_object.write(
-            f'\n\n{"-"*80}\nNew session starts at: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n')
-
-        print(
-            f'==> iperf3 stdout will be logged to: {self.stdout_log_file}')
+            f'\n\n{"-"*80}\nNew session starts at: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n{"-"*80}\n')
 
     def parse_args_to_string(self):
         self.tos_string = f' -S {self.tos}' if self.tos else ''
@@ -85,7 +77,6 @@ class Iperf3_logger(Amari_logger):
         self.window_string = f' -w {self.window}' if self.window else ''
         self.parallel_string = f' -P {self.parallel}' if self.parallel else ''
         self.set_mss_string = f' -M {self.set_mss}' if self.set_mss else ''
-
         self.reverse_string = ' -R' if self.reverse else ''
         self.udp_string = ' -u' if self.udp else ''
 
@@ -98,12 +89,10 @@ class Iperf3_logger(Amari_logger):
             f'{self.set_mss_string}'\
             f'{self.reverse_string}'\
             f'{self.udp_string}'
-        print(f'==> cmd send: \n\n\t{self.cmd}\n')
-        self.stdout_log_object.write(f'iperf3 cmd: {self.cmd}\n{"-"*80}\n')
 
-    def show_progress(self, counter, mbps):
+    def show_progress(self, seq_counter, mbps):
         print(
-            f'{counter}: '
+            f'{seq_counter}: '
             f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, '
             f'dst: {self.host}, '
             # f'tos: {self.tos}, '
@@ -139,13 +128,12 @@ class Iperf3_logger(Amari_logger):
     def wait_until_connection_is_back(self):
         sleep(2)
         print(
-            f'\n==> trying to check iperf3 server to know whether connection is back or not...')
+            f'\n==> Trying to check iperf3 server to know whether connection is back or not...')
 
+        # make sure iperf server is back
         if self.platform == 'Darwin':
-            # cmd = f'ping -c 1 -W 2000 {self.host}'
             cmd = f'nc -vz -w 2 {self.host} {self.port}'
         elif self.platform == 'Linux':
-            # cmd = f'ping -c 1 -W 2 {self.host}'
             cmd = f'nc -vz -w 2 {self.host} {self.port}'
 
         while True:
@@ -160,75 +148,79 @@ class Iperf3_logger(Amari_logger):
                 break
         return
 
+    def send_to_db_on_demend(self, record_time, mbps):
+        if not self.dont_send_to_db:
+            data = self.gen_influx_format(record_time, mbps)
+            self.logging_with_buffer(data)
+        return
+
+    def check_if_is_disconnected(self, mbps):
+        if mbps == 0:
+            self.zero_counter += 1
+            if self.zero_counter >= 180:
+                print(
+                    '\n==> Can\'t get result from server for 3 mins, session stopped.(Disconnecion may be the reason)\n')
+                return True
+        else:
+            self.zero_counter = 0
+            return False
+
     def run_iperf3_session(self):
         print('==> Start iperf3 session...\n')
+        self.refresh_log_file()
         sleep(2)
 
         child = pexpect.spawnu(self.cmd, timeout=10,
                                logfile=self.stdout_log_object)
-        zero_counter = 0
-        counter = 0
+        self.zero_counter = 0
+        seq_counter = 0
         while True:
             try:
                 child.expect('\n')
-                line = child.before
-                record_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-
-                # check if parallel number > 2
-                # must be a better way, TODO
-                if self.parallel < 2:
-                    mbps = float(list(filter(None, line.split(' ')))[6])
-                    counter += 1
-                else:
-                    if not self.sum_parallel_pattern.search(line):
-                        continue
-                    else:
-                        mbps = float(
-                            self.sum_parallel_pattern.search(line).group(1))
-                        counter += 1
-
-                if self.check_if_is_summary_and_show(line):
-                    continue
-
-                self.show_progress(counter, mbps)
-
-                if not self.dont_send_to_db:
-                    data = self.gen_influx_format(record_time, mbps)
-                    self.logging_with_buffer(data)
-
-                if mbps == 0:
-                    zero_counter += 1
-                    if zero_counter == 180:
-                        print(
-                            '\n==> Can\'t get result from server for 3 mins, stopped.(Disconnecion may be the reason)\n')
-                        break
-                else:
-                    zero_counter = 0
-
             except pexpect.exceptions.EOF as e:
-                print('==> Got an EOF, ended. Please check the iperf3 server.')
-                self.stdout_log_object.close()
+                print(
+                    '==> Got an EOF, ended. Cause: iperf server not ready or normal timeup end.')
                 break
-            except (ValueError, IndexError) as e:
-                # print(e)
-                # skip iperf stdout that DONT contain throughput lines
-                pass
+            line = child.before
+            record_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
+            # get throughput but check first if parallel number > 2
+            if self.parallel < 2:
+                if not self.single_thread_mode_throughput_pattern.search(line):
+                    continue
+                mbps = float(
+                    self.single_thread_mode_throughput_pattern.search(line).group(1))
+                seq_counter += 1
+            else:
+                if not self.multi_threads_mode_throughput_pattern.search(line):
+                    continue
+                else:
+                    mbps = float(
+                        self.multi_threads_mode_throughput_pattern.search(line).group(1))
+                    seq_counter += 1
+
+            if self.check_if_is_summary_and_show(line):
+                continue
+
+            self.show_progress(seq_counter, mbps)
+            self.send_to_db_on_demend(record_time, mbps)
+
+            if self.check_if_is_disconnected(mbps):
+                break
+
+        self.stdout_log_object.close()
         self.clean_buffer_and_send()
+        child.kill(signal.SIGINT)
         return
 
     def run(self):
         # TODO fix cmd send confirm msg show everytime when restart session
         if input('Please confirm info above and press enter to continue.\n') != '':
             return
-        self.refresh_log_file()
-        self.parse_args_to_string()
         self.run_iperf3_session()
 
-        if self.is_try_restart:
+        if self.is_try_restart and self.duration == 0:
             while True:
-                self.refresh_log_file()
-                self.parse_args_to_string()
                 self.wait_until_connection_is_back()
                 self.run_iperf3_session()
                 sleep(3)
@@ -306,4 +298,3 @@ if __name__ == '__main__':
             sys.exit(0)
         except SystemExit:
             os._exit(0)
-

@@ -10,6 +10,7 @@ import argparse
 import re
 import pexpect
 import threading
+import signal
 
 
 class Iperf3_logger(Amari_logger):
@@ -135,6 +136,7 @@ class Iperf3_logger(Amari_logger):
                 # skip iperf stdout that DONT contain throughput lines
                 pass
         self.clean_buffer_and_send()
+        child.kill(signal.SIGINT)
         return
 
     def run(self):
