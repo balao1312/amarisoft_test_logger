@@ -5,12 +5,11 @@ import sys
 import os
 from time import sleep
 from datetime import datetime
+from datetime import timedelta
 from copy import copy
 from amari_logger import Amari_logger
 import argparse
-import threading
 import pexpect
-import shlex
 import statistics
 
 
@@ -25,7 +24,6 @@ class Ping_logger(Amari_logger):
         self.notify_cap = notify_cap
         self.interval = interval
         self.label = label
-        self.unsent_notify = []
         self.ping_no_return_count = 0
         self.is_disconnected = False
         self.project_field_name = project_field_name
@@ -41,7 +39,8 @@ class Ping_logger(Amari_logger):
         print('\n==> Tool related args:')
         print('-' * 120)
         print(self.turn_to_form('influxdb database', self.influxdb_dbname))
-        print(self.turn_to_form('send nofify', str(bool(self.will_send_notify))))
+        print(self.turn_to_form('send disconnect nofify',
+              str(bool(self.will_send_notify))))
         print(self.turn_to_form(
             'latency cap to notify (ms)', self.notify_cap))
         print(self.turn_to_form('send data to db', str(bool(self.is_send_to_db))))
@@ -63,20 +62,6 @@ class Ping_logger(Amari_logger):
         result = subprocess.check_output(
             [cmd], stderr=subprocess.STDOUT).decode('utf8').strip()
         return result
-
-    @property
-    def is_with_internet(self):
-        if self.platform == 'Darwin':
-            cmd = 'ping -c 1 -W 2000 google.com'
-        elif self.platform == 'Linux':
-            cmd = 'ping -c 1 -W 2 google.com'
-        result = subprocess.run(shlex.split(
-            cmd), stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
-
-        if result.returncode:
-            return False
-        else:
-            return True
 
     def parse_args_to_string(self):
         if self.platform == 'Darwin':
@@ -100,26 +85,6 @@ class Ping_logger(Amari_logger):
         print(f'==> cmd send: \n\t\t{self.cmd}\n')
         self.stdout_log_object.write(f'ping cmd: {self.cmd}\n{"-"*80}\n')
 
-    def check_unsend_notify_and_try_send(self):
-        '''
-        All notify msg will be add to self.unsend_notify. This func will check if any and try to send.
-        '''
-        while True:
-            if self.child.closed:
-                return
-            if not self.is_with_internet:
-                sleep(5)
-                continue
-            if self.unsent_notify:
-                print(
-                    f'==> Find {len(self.unsent_notify)} unsend notify, try sending...')
-                for each_msg in self.unsent_notify:
-                    msg_with_projectf_field_name = f'\n[{self.project_field_name}]\n{each_msg}'
-                    if not self.send_line_notify('balao', msg_with_projectf_field_name):
-                        self.unsent_notify.remove(each_msg)
-                    sleep(1)
-            sleep(5)
-
     def gen_influx_format(self, record_time, latency):
         return {
             'measurement': 'ping',
@@ -131,12 +96,21 @@ class Ping_logger(Amari_logger):
             'fields': {'RTT': latency}
         }
 
+    def gen_notify_format(self, msg):
+        return {
+            'project_field_name': self.project_field_name,
+            'dst': 'balao',
+            'msg': msg
+        }
+
     def check_if_latency_higher_than_criteria(self, latency, counter):
         if self.notify_cap and latency > self.notify_cap:
             msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n'\
                 f'got a RTT value from {self.ip} higher than {self.notify_cap} ms.\n'\
                 f'value: {latency} ms.\nSeq: {counter}'
-            self.unsent_notify.append(msg)
+            # TODO dst
+            notify = self.gen_notify_format(msg)
+            self.unsend_line_notify_queue.put(notify)
 
     def show_every_sec_result(self, counter, latency):
         msg = f'{counter}: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, '\
@@ -183,12 +157,6 @@ rtt min/avg/max/mdev = {summary_min}/{summary_avg:.3f}/{summary_max}/{statistics
         self.child = pexpect.spawnu(self.cmd, timeout=10,
                                     logfile=self.stdout_log_object)
 
-        # start notify check on background after child process is established
-        if self.will_send_notify:
-            self.thread_check_notify = threading.Thread(
-                target=self.check_unsend_notify_and_try_send, args=([]))
-            self.thread_check_notify.start()
-
         self.counter = 0
         while True:
             try:
@@ -210,17 +178,19 @@ rtt min/avg/max/mdev = {summary_min}/{summary_avg:.3f}/{summary_max}/{statistics
                     print('.', end='')
 
                 # if more than 5 packet lost back to back,than consider it disconnected.
-                if self.ping_no_return_count > 5:
+                if self.ping_no_return_count >= 5:
                     self.is_disconnected = True
                     print(
                         f'\n==> ICMP packets are not returned. Target IP: {self.ip} cannot be reached. ')
 
                     # Send line notify
-                    msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, target IP {self.ip} cannot be reached.'
-                    self.unsent_notify.append(msg)
+                    delta = timedelta(seconds=-5)
+                    msg = f'[BAD] {(datetime.now()+delta).strftime("%Y-%m-%d %H:%M:%S")}\ntarget IP {self.ip} cannot be reached.'
+                    self.unsend_line_notify_queue.put(
+                        self.gen_notify_format(msg))
 
                     # if stay disconnected, will notify again after 1hr
-                    self.ping_no_return_count = -3595
+                    self.ping_no_return_count = -3596
                 continue
 
             record_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
@@ -238,8 +208,8 @@ rtt min/avg/max/mdev = {summary_min}/{summary_avg:.3f}/{summary_max}/{statistics
 
             # notify for the come back of connection
             if self.is_disconnected:
-                msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, {self.ip} can be reached again. :)'
-                self.unsent_notify.append(msg)
+                msg = f'[GOOD] {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n{self.ip} can be reached again. :)'
+                self.unsend_line_notify_queue.put(self.gen_notify_format(msg))
                 self.is_disconnected = False
 
             self.check_if_latency_higher_than_criteria(latency, self.counter)

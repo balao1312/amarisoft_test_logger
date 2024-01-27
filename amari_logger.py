@@ -4,7 +4,10 @@ import pickle
 import json
 import time
 import requests
-import sys
+import subprocess
+import shlex
+from time import sleep
+import queue
 
 from config import config
 
@@ -41,7 +44,6 @@ class Amari_logger:
         time.sleep(2)
 
     def __init__(self):
-
         self.log_folder = Path.cwd().joinpath('logs')
         if not self.log_folder.exists():
             self.log_folder.mkdir()
@@ -54,6 +56,34 @@ class Amari_logger:
 
         self.data_pool = []
         self.is_in_sending_to_db_session = False
+
+        self.unsend_line_notify_queue = queue.Queue()
+
+        # start notify check on background after child process is established
+        self.thread_check_unsend_line_notify = threading.Thread(
+            target=self.check_unsend_line_notify_and_try_send, args=([]))
+        self.thread_check_unsend_line_notify.start()
+
+    @property
+    def platform(self):
+        cmd = 'uname'
+        result = subprocess.check_output(
+            [cmd], stderr=subprocess.STDOUT).decode('utf8').strip()
+        return result
+
+    @property
+    def is_with_internet(self):
+        if self.platform == 'Darwin':
+            cmd = 'ping -c 1 -W 2000 google.com'
+        elif self.platform == 'Linux':
+            cmd = 'ping -c 1 -W 2 google.com'
+        result = subprocess.run(shlex.split(
+            cmd), stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+
+        if result.returncode:
+            return False
+        else:
+            return True
 
     def send_line_notify(self, dst, msg):
         def lineNotifyMessage(line_token, msg):
@@ -72,19 +102,40 @@ class Amari_logger:
             return
 
         token = self.line_notify_token[dst]
-        print('==> trying send notify ...')
+        print('==> Trying send line notify ...')
 
         try:
             lineNotifyMessage(token, msg)
-            print('==> Notify sent.')
-            return 0
+            print('==> Line notify sent.')
+            return
         except Exception as e:
-            # try to show which function is error from
-            # print(f'==> func: {sys._getframe().f_code.co_name} error: {e.__class__} {e}')
+            print(f'==> Send notify failed. Cause: {e}. \nmsg: {msg}')
+            return
 
-            # mostly because no internet
-            print(f'==> Send notify failed. msg: {msg}')
-            return 1
+    def check_unsend_line_notify_and_try_send(self):
+        '''
+        All notify msg will be add to self.unsend_line_notify_queue.
+        This func will check if there is any and try to send.
+
+        line notify data format: {
+            'project_field_name':
+            'dst':
+            'msg':
+        }
+        '''
+        while True:
+            if not self.is_with_internet:
+                sleep(5)
+                continue
+            try:
+                notify = self.unsend_line_notify_queue.get(timeout=3)
+                self.unsend_line_notify_queue.task_done()
+                msg_string = f'\n[{notify["project_field_name"]}]\n{notify["msg"]}'
+                self.send_line_notify(notify['dst'], msg_string)
+            except queue.Empty as e:
+                continue
+
+            sleep(5)
 
     def write_to_file(self):
         with open(self.log_file, 'a') as f:
@@ -116,7 +167,7 @@ class Amari_logger:
             self.send_fail_file.unlink()
 
         try:
-            print('==> trying to send to db ...')
+            print('==> Trying to send records to db...')
             self.is_in_sending_to_db_session = True
             db_cli.write_points(influx_format_list)
             print(f'==> {len(influx_format_list)} records sent.')
