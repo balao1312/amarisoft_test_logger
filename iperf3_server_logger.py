@@ -58,11 +58,13 @@ class Iperf3_logger(Amari_logger):
     def validate_notify_dst(self): 
         if self.can_send_line_notify:
             if not self.notify_dst:
-                print(f'==> Waring: Notify destination is not set.')
+                print(f'==> Waring: Notify destination is not set, notify function is disabled.')
+                self.can_send_line_notify = False
                 return
             if not self.notify_dst in self.line_notify_dsts:
                 print(f'\n==> Notify destination "{self.notify_dst}" is not valid, notify function is disabled.\n')
                 self.can_send_line_notify = False
+                return
 
     def turn_to_form(self, a, b):
         return f'| {a:<30}| {b:<85}|\n{"-" * 120}'

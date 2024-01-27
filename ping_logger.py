@@ -15,7 +15,7 @@ import statistics
 
 class Ping_logger(Amari_logger):
 
-    def __init__(self, ip, tos, exec_secs, notify_when_disconnected, notify_cap, interval, label, project_field_name, dont_send_to_db):
+    def __init__(self, ip, tos, exec_secs, notify_when_disconnected, notify_cap, interval, label, project_field_name, dont_send_to_db, notify_dst):
         super().__init__()
         self.ip = ip
         self.tos = tos
@@ -28,8 +28,10 @@ class Ping_logger(Amari_logger):
         self.project_field_name = project_field_name
         self.all_latency_values = []
         self.dont_send_to_db = dont_send_to_db
+        self.notify_dst = notify_dst
 
         self.display_all_option()
+        self.validate_notify_dst()
 
     def turn_to_form(self, a, b):
         return f'| {a:<30}| {b:<85}|\n{"-" * 120}'
@@ -46,6 +48,18 @@ class Ping_logger(Amari_logger):
               str(bool(not self.dont_send_to_db))))
         print(self.turn_to_form('data label in db', self.label))
         print(self.turn_to_form('project field name', self.project_field_name))
+        print(self.turn_to_form('notify destination', self.notify_dst))
+
+    def validate_notify_dst(self): 
+        if self.can_send_line_notify:
+            if not self.notify_dst:
+                print(f'==> Waring: Notify destination is not set, notify function is disabled.')
+                self.can_send_line_notify = False
+                return
+            if not self.notify_dst in self.line_notify_dsts:
+                print(f'\n==> Notify destination "{self.notify_dst}" is not valid, notify function is disabled.\n')
+                self.can_send_line_notify = False
+                return
 
     def refresh_log_file(self):
         self.log_file = self.log_folder.joinpath(
@@ -174,8 +188,10 @@ rtt min/avg/max/mdev = {summary_min}/{summary_avg:.3f}/{summary_max}/{statistics
 
             # if stay disconnected, will notify again after 1hr
             self.ping_no_return_count = -3596
-    
+
     def send_line_notify_on_demand(self, msg):
+        if not self.can_send_line_notify:
+            return
         if self.notify_when_disconnected:
             self.unsend_line_notify_queue.put(self.gen_notify_format(msg))
         return
@@ -251,11 +267,23 @@ if __name__ == '__main__':
                         help='send notify if target cannot be reached.')
     parser.add_argument('-U', '--dont_send_to_db', action="store_true",
                         help='disable sending record to db')
+    parser.add_argument('-D', '--notify_dst', metavar='', default='', type=str,
+                        help='line notify send destination')
 
     args = parser.parse_args()
 
-    logger = Ping_logger(args.host, args.tos, args.exec_secs, args.notify_when_disconnected,
-                         args.notify_cap, args.interval, args.label, args.project_field_name, args.dont_send_to_db)
+    logger = Ping_logger(
+        args.host,
+        args.tos,
+        args.exec_secs,
+        args.notify_when_disconnected,
+        args.notify_cap,
+        args.interval,
+        args.label,
+        args.project_field_name,
+        args.dont_send_to_db,
+        args.notify_dst
+    )
 
     try:
         logger.run()
