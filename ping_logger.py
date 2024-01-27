@@ -15,20 +15,19 @@ import statistics
 
 class Ping_logger(Amari_logger):
 
-    def __init__(self, ip, tos, exec_secs, notify, notify_cap, interval, label, project_field_name, dont_send_to_db):
+    def __init__(self, ip, tos, exec_secs, notify_when_disconnected, notify_cap, interval, label, project_field_name, dont_send_to_db):
         super().__init__()
         self.ip = ip
         self.tos = tos
         self.exec_secs = exec_secs
-        self.will_send_notify = notify
+        self.notify_when_disconnected = notify_when_disconnected
         self.notify_cap = notify_cap
         self.interval = interval
         self.label = label
-        self.ping_no_return_count = 0
         self.is_disconnected = False
         self.project_field_name = project_field_name
         self.all_latency_values = []
-        self.is_send_to_db = not dont_send_to_db
+        self.dont_send_to_db = dont_send_to_db
 
         self.display_all_option()
 
@@ -40,10 +39,11 @@ class Ping_logger(Amari_logger):
         print('-' * 120)
         print(self.turn_to_form('influxdb database', self.influxdb_dbname))
         print(self.turn_to_form('send disconnect nofify',
-              str(bool(self.will_send_notify))))
+              str(bool(self.notify_when_disconnected))))
         print(self.turn_to_form(
             'latency cap to notify (ms)', self.notify_cap))
-        print(self.turn_to_form('send data to db', str(bool(self.is_send_to_db))))
+        print(self.turn_to_form('send data to db',
+              str(bool(not self.dont_send_to_db))))
         print(self.turn_to_form('data label in db', self.label))
         print(self.turn_to_form('project field name', self.project_field_name))
 
@@ -103,11 +103,11 @@ class Ping_logger(Amari_logger):
             'msg': msg
         }
 
-    def check_if_latency_higher_than_criteria(self, latency, counter):
+    def check_if_latency_higher_than_criteria(self, latency, seq_counter):
         if self.notify_cap and latency > self.notify_cap:
             msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n'\
                 f'got a RTT value from {self.ip} higher than {self.notify_cap} ms.\n'\
-                f'value: {latency} ms.\nSeq: {counter}'
+                f'value: {latency} ms.\nSeq: {seq_counter}'
             # TODO dst
             notify = self.gen_notify_format(msg)
             self.unsend_line_notify_queue.put(notify)
@@ -148,6 +148,38 @@ rtt min/avg/max/mdev = {summary_min}/{summary_avg:.3f}/{summary_max}/{statistics
         with open(self.stdout_log_file, 'a') as f:
             f.write(summary_string)
 
+    def send_to_db_on_demend(self, record_time, latency):
+        if not self.dont_send_to_db:
+            data = self.gen_influx_format(record_time, latency)
+            self.logging_with_buffer(data)
+        return
+
+    def process_with_lines_dont_contain_latency(self, line):
+        # deal with no reply
+        if self.prompt_when_no_reply in line:
+            self.ping_no_return_count += 1
+            self.seq_counter += 1
+            print('.', end='')
+
+        # if more than 5 packet lost back to back,than consider it disconnected.
+        if self.ping_no_return_count >= 5:
+            self.is_disconnected = True
+            print(
+                f'\n==> ICMP packets are not returned. Target IP: {self.ip} cannot be reached. ')
+
+            # Send line notify
+            delta = timedelta(seconds=-5)
+            msg = f'[BAD] {(datetime.now()+delta).strftime("%Y-%m-%d %H:%M:%S")}\ntarget IP {self.ip} cannot be reached.'
+            self.send_line_notify_on_demand(msg)
+
+            # if stay disconnected, will notify again after 1hr
+            self.ping_no_return_count = -3596
+    
+    def send_line_notify_on_demand(self, msg):
+        if self.notify_when_disconnected:
+            self.unsend_line_notify_queue.put(self.gen_notify_format(msg))
+        return
+
     def run(self):
         self.refresh_log_file()
         self.parse_args_to_string()
@@ -157,7 +189,8 @@ rtt min/avg/max/mdev = {summary_min}/{summary_avg:.3f}/{summary_max}/{statistics
         self.child = pexpect.spawnu(self.cmd, timeout=10,
                                     logfile=self.stdout_log_object)
 
-        self.counter = 0
+        self.ping_no_return_count = 0
+        self.seq_counter = 0
         while True:
             try:
                 self.child.expect('\n')
@@ -171,51 +204,31 @@ rtt min/avg/max/mdev = {summary_min}/{summary_avg:.3f}/{summary_max}/{statistics
                 latency = float(
                     list(filter(None, line.split(' ')))[6][5:10])
             except (ValueError, IndexError):
-                # deal with no reply
-                if self.prompt_when_no_reply in line:
-                    self.ping_no_return_count += 1
-                    self.counter += 1
-                    print('.', end='')
-
-                # if more than 5 packet lost back to back,than consider it disconnected.
-                if self.ping_no_return_count >= 5:
-                    self.is_disconnected = True
-                    print(
-                        f'\n==> ICMP packets are not returned. Target IP: {self.ip} cannot be reached. ')
-
-                    # Send line notify
-                    delta = timedelta(seconds=-5)
-                    msg = f'[BAD] {(datetime.now()+delta).strftime("%Y-%m-%d %H:%M:%S")}\ntarget IP {self.ip} cannot be reached.'
-                    self.unsend_line_notify_queue.put(
-                        self.gen_notify_format(msg))
-
-                    # if stay disconnected, will notify again after 1hr
-                    self.ping_no_return_count = -3596
+                self.process_with_lines_dont_contain_latency(line)
                 continue
 
             record_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-            self.counter += 1
+            self.seq_counter += 1
 
-            self.show_every_sec_result(self.counter, latency)
-
-            data = self.gen_influx_format(record_time, latency)
-            self.logging_with_buffer(data)
-
+            self.show_every_sec_result(self.seq_counter, latency)
+            self.send_to_db_on_demend(record_time, latency)
             self.all_latency_values.append(latency)
+            self.check_if_latency_higher_than_criteria(
+                latency, self.seq_counter)
 
-            # for notify, reset to 0, for only 5 secs to start notify if disconnect happens again
+            # for notify, successful ICMP reply reset counter to 0
             self.ping_no_return_count = 0
 
-            # notify for the come back of connection
+            # notify for the come back of connection and toggle is_disconnected
             if self.is_disconnected:
                 msg = f'[GOOD] {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n{self.ip} can be reached again. :)'
-                self.unsend_line_notify_queue.put(self.gen_notify_format(msg))
+                self.send_line_notify_on_demand(msg)
                 self.is_disconnected = False
 
-            self.check_if_latency_higher_than_criteria(latency, self.counter)
-
+        self.stdout_log_object.close()
         self.clean_buffer_and_send()
         self.child.close()
+        return
 
 
 if __name__ == '__main__':
@@ -234,14 +247,14 @@ if __name__ == '__main__':
                         help='record label in db')
     parser.add_argument('-F', '--project_field_name', default='', type=str, metavar='',
                         help='project field name for notify lable')
-    parser.add_argument('-n', '--notify', action="store_true",
-                        help='send notify if target cannot be reached or latency is higher than user defined')
+    parser.add_argument('-n', '--notify_when_disconnected', action="store_true",
+                        help='send notify if target cannot be reached.')
     parser.add_argument('-U', '--dont_send_to_db', action="store_true",
                         help='disable sending record to db')
 
     args = parser.parse_args()
 
-    logger = Ping_logger(args.host, args.tos, args.exec_secs, args.notify,
+    logger = Ping_logger(args.host, args.tos, args.exec_secs, args.notify_when_disconnected,
                          args.notify_cap, args.interval, args.label, args.project_field_name, args.dont_send_to_db)
 
     try:
