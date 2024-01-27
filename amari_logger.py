@@ -32,6 +32,7 @@ class Amari_logger:
         print('\n==> credential.py is not found or db_config format incorrect, send to db function is disabled.')
         time.sleep(2)
         is_send_to_db = False
+        influxdb_dbname = ''
 
     try:
         line_notify_token = db_config['line_notify_token']
@@ -52,10 +53,7 @@ class Amari_logger:
         self.number_of_buffer = config['number_of_buffer']
 
         self.data_pool = []
-        self.is_sending = False
-
-        if self.is_send_to_db:
-            print(f'\n==> database used in influxdb: {self.influxdb_dbname}')
+        self.is_in_sending_to_db_session = False
 
     def send_line_notify(self, dst, msg):
         def lineNotifyMessage(line_token, msg):
@@ -70,10 +68,10 @@ class Amari_logger:
             return r.status_code
 
         if not self.line_notify_token:
+            print(f'==> Unable to send line notify due to no token.')
             return
 
         token = self.line_notify_token[dst]
-
         print('==> trying send notify ...')
 
         try:
@@ -119,10 +117,10 @@ class Amari_logger:
 
         try:
             print('==> trying to send to db ...')
-            self.is_sending = True
+            self.is_in_sending_to_db_session = True
             db_cli.write_points(influx_format_list)
             print(f'==> {len(influx_format_list)} records sent.')
-            self.is_sending = False
+            self.is_in_sending_to_db_session = False
 
         except Exception as e:
             print('==> send failed. put data to send_fail.')
@@ -137,7 +135,7 @@ class Amari_logger:
 
             with open(self.send_fail_file, 'wb') as f:
                 pickle.dump(influx_format_list, f)
-            self.is_sending = False
+            self.is_in_sending_to_db_session = False
 
     def data_landing(self):
         self.write_to_file()

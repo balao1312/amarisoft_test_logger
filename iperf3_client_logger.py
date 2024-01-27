@@ -45,10 +45,11 @@ class Iperf3_logger(Amari_logger):
         self.display_all_option()
 
     def display_all_option(self):
-        print('==> Tool related args:')
+        print('\n==> Tool related args:')
         print('-' * 120)
         # TODO feat:notify
         # print(self.turn_to_form('send nofify', str(bool(self.will_send_notify))))
+        print(self.turn_to_form('influxdb database', self.influxdb_dbname))
         print(self.turn_to_form('send data to db',
               str(bool(not self.dont_send_to_db))))
         print(self.turn_to_form('data label in db', self.label))
@@ -285,7 +286,7 @@ if __name__ == '__main__':
         sleep(0.1)
         max_sec_count = logger.db_retries * logger.db_timeout
         countdown = copy(max_sec_count)
-        while logger.is_sending:
+        while logger.is_in_sending_to_db_session:
             if countdown < max_sec_count:
                 print(
                     f'==> waiting for process to end ... secs left max {countdown}')

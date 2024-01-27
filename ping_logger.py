@@ -35,17 +35,15 @@ class Ping_logger(Amari_logger):
         self.display_all_option()
 
     def turn_to_form(self, a, b):
-        return f'| {a:<50}| {b:<85}|\n{"-" * 120}'
+        return f'| {a:<30}| {b:<85}|\n{"-" * 120}'
 
     def display_all_option(self):
+        print('\n==> Tool related args:')
         print('-' * 120)
-        print(self.turn_to_form('target ip', self.ip))
-        print(self.turn_to_form('execute times(secs)', self.exec_secs))
-        # print(turn_to_form('TOS, type of service value', self.tos))
-        # print(turn_to_form('interval between packets', self.interval))
+        print(self.turn_to_form('influxdb database', self.influxdb_dbname))
         print(self.turn_to_form('send nofify', str(bool(self.will_send_notify))))
         print(self.turn_to_form(
-            'latency value cap to notify (millisecs)', self.notify_cap))
+            'latency cap to notify (ms)', self.notify_cap))
         print(self.turn_to_form('send data to db', str(bool(self.is_send_to_db))))
         print(self.turn_to_form('data label in db', self.label))
         print(self.turn_to_form('project field name', self.project_field_name))
@@ -58,9 +56,6 @@ class Ping_logger(Amari_logger):
         self.stdout_log_object = open(self.stdout_log_file, 'a')
         self.stdout_log_object.write(
             f'\n\n{"-"*80}\nNew session starts at: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n')
-
-        print(self.turn_to_form(
-            'ping stdout will be saved to', str(self.stdout_log_file)))
 
     @property
     def platform(self):
@@ -103,7 +98,6 @@ class Ping_logger(Amari_logger):
                    f'{interval_string}'
 
         print(f'==> cmd send: \n\t\t{self.cmd}\n')
-        print('-'*80)
         self.stdout_log_object.write(f'ping cmd: {self.cmd}\n{"-"*80}\n')
 
     def check_unsend_notify_and_try_send(self):
@@ -118,7 +112,7 @@ class Ping_logger(Amari_logger):
                 continue
             if self.unsent_notify:
                 print(
-                    f'==> Find {len(self.unsent_notify)} unsend notify before, try sending...')
+                    f'==> Find {len(self.unsent_notify)} unsend notify, try sending...')
                 for each_msg in self.unsent_notify:
                     msg_with_projectf_field_name = f'\n[{self.project_field_name}]\n{each_msg}'
                     if not self.send_line_notify('balao', msg_with_projectf_field_name):
@@ -157,6 +151,12 @@ class Ping_logger(Amari_logger):
         5 packets transmitted, 5 received, 0% packet loss, time 4074ms
         rtt min/avg/max/mdev = 0.729/0.770/0.909/0.071 ms
         '''
+
+        # avoid error when ctrlc at beginning confirm stage
+        try:
+            self.counter
+        except:
+            return
 
         lost_rate = ((self.counter - len(self.all_latency_values)
                       ) / self.counter) * 100
@@ -288,7 +288,7 @@ if __name__ == '__main__':
         # try send data in buffer before close, timeout can be set in config.py
         max_sec_count = logger.db_retries * logger.db_timeout
         countdown = copy(max_sec_count)
-        while logger.is_sending:
+        while logger.is_in_sending_to_db_session:
             if countdown < max_sec_count:
                 print(
                     f'==> waiting for process to end ... secs left max {countdown}')
