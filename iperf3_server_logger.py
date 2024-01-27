@@ -9,20 +9,20 @@ from amari_logger import Amari_logger
 import argparse
 import re
 import pexpect
-import threading
 import signal
 
 
 class Iperf3_logger(Amari_logger):
 
-    def __init__(self, port, parallel, notify, label, dont_send_to_db, project_field_name):
+    def __init__(self, port, parallel, notify_when_terminated, label, dont_send_to_db, project_field_name, notify_dst):
         super().__init__()
         self.port = port
         self.is_in_parallel_mode = parallel
-        self.notify_when_terminated = notify
+        self.notify_when_terminated = notify_when_terminated
         self.label = label
         self.project_field_name = project_field_name
         self.dont_send_to_db = dont_send_to_db
+        self.notify_dst = notify_dst
 
         # define RE patterns
         self.average_pattern = re.compile(r'.*(sender|receiver)')
@@ -37,6 +37,7 @@ class Iperf3_logger(Amari_logger):
 
         self.parse_args_to_string()
         self.display_all_option()
+        self.validate_notify_dst()
 
     def display_all_option(self):
         print('\n==> Tool related args:')
@@ -50,8 +51,18 @@ class Iperf3_logger(Amari_logger):
               str(bool(self.notify_when_terminated))))
         print(self.turn_to_form('parallel mode',
               str(bool(self.is_in_parallel_mode))))
+        print(self.turn_to_form('notify destination', self.notify_dst))
         print('==> !!!!!!!!!!!!!!!!! check parallel mode arg or the result would be wrong!')
         print(f'==> original cmd send: \n\n\t{self.cmd}\n')
+    
+    def validate_notify_dst(self): 
+        if self.can_send_line_notify:
+            if not self.notify_dst:
+                print(f'==> Waring: Notify destination is not set.')
+                return
+            if not self.notify_dst in self.line_notify_dsts:
+                print(f'\n==> Notify destination "{self.notify_dst}" is not valid, notify function is disabled.\n')
+                self.can_send_line_notify = False
 
     def turn_to_form(self, a, b):
         return f'| {a:<30}| {b:<85}|\n{"-" * 120}'
@@ -85,12 +96,20 @@ class Iperf3_logger(Amari_logger):
             'fields': {'Mbps': mbps}
         }
 
+    def gen_notify_format(self, msg):
+        return {
+            'project_field_name': self.project_field_name,
+            'dst': self.notify_dst,
+            'msg': msg
+        }
+
     def notify_when_client_termainated_on_demand(self, line):
+        if not self.can_send_line_notify:
+            return
         if self.terminated_pattern.match(line) and self.notify_when_terminated:
-            msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n{self.label}\n{line.strip()}.'
-            thread_1 = threading.Thread(
-                target=self.send_line_notify, args=('balao', msg))
-            thread_1.start()
+            msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n{line.strip()}.'
+            self.unsend_line_notify_queue.put(self.gen_notify_format(msg))
+        return
 
     def send_to_db_on_demend(self, record_time, mbps):
         if not self.dont_send_to_db:
@@ -114,7 +133,7 @@ class Iperf3_logger(Amari_logger):
         The idea is to show original iperf3 server stdout, so not showing counter every second.
         '''
 
-        print('==> Start iperf3 session...\n')
+        print('==> Start iperf3 server session...\n')
         self.refresh_log_file()
         sleep(1)
 
@@ -179,7 +198,7 @@ if __name__ == '__main__':
                         help='iperf server port')
     parser.add_argument('-P', '--parallel', action="store_true",
                         help='detect client in parallel mode')
-    parser.add_argument('-n', '--notify', action="store_true",
+    parser.add_argument('-n', '--notify_when_terminated', action="store_true",
                         help='notify when terminated')
     parser.add_argument('-l', '--label', metavar='', default='', type=str,
                         help='data label')
@@ -187,16 +206,19 @@ if __name__ == '__main__':
                         help='Name of the project field')
     parser.add_argument('-U', '--dont_send_to_db', action="store_true",
                         help='disable sending record to db')
+    parser.add_argument('-D', '--notify_dst', metavar='', default='', type=str,
+                        help='line notify send destination')
 
     args = parser.parse_args()
 
     logger = Iperf3_logger(
         port=args.port,
         parallel=args.parallel,
-        notify=args.notify,
+        notify_when_terminated=args.notify_when_terminated,
         label=args.label,
         project_field_name=args.project_field_name,
-        dont_send_to_db=args.dont_send_to_db
+        dont_send_to_db=args.dont_send_to_db,
+        notify_dst=args.notify_dst
     )
 
     try:

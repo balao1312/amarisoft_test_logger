@@ -37,32 +37,39 @@ class Amari_logger:
         is_send_to_db = False
         influxdb_dbname = ''
 
-    try:
-        line_notify_token = db_config['line_notify_token']
-    except (NameError, ImportError, KeyError) as e:
-        print('\n==> Line notify token is not found in credential.py, notify function is disabled.')
-        time.sleep(2)
-
     def __init__(self):
         self.log_folder = Path.cwd().joinpath('logs')
         if not self.log_folder.exists():
             self.log_folder.mkdir()
 
         self.send_fail_file = self.log_folder.joinpath('send_fail')
-
         self.db_timeout = config['db_connect_timeout']
         self.db_retries = config['db_connect_retries']
         self.number_of_buffer = config['number_of_buffer']
-
         self.data_pool = []
         self.is_in_sending_to_db_session = False
-
+        self.can_send_line_notify = False
         self.unsend_line_notify_queue = queue.Queue()
+        self.validate_notify_token()
 
         # start notify check on background after child process is established
         self.thread_check_unsend_line_notify = threading.Thread(
             target=self.check_unsend_line_notify_and_try_send, args=([]))
         self.thread_check_unsend_line_notify.start()
+
+    def validate_notify_token(self):
+        try:
+            self.line_notify_dsts = self.db_config['line_notify_token']
+            if len(self.line_notify_dsts) > 0:
+                self.can_send_line_notify = True
+            else:
+                print(
+                    '\n==> Line notify token is not found, notify function is disabled.')
+                time.sleep(2)
+        except (NameError, ImportError, KeyError) as e:
+            print(
+                '\n==> Line notify token is not found, notify function is disabled.')
+            time.sleep(2)
 
     @property
     def platform(self):
@@ -109,16 +116,16 @@ class Amari_logger:
             self.unsend_line_notify_queue.put(
                 self.parse_line_msg_back_to_queue_object(line_token, msg))
 
-        if not self.line_notify_token:
-            print(f'==> Unable to send line notify due to no token.')
+        if not self.can_send_line_notify:
             return
 
-        token = self.line_notify_token[dst]
+        token = self.line_notify_dsts[dst]
         print('==> Trying send line notify...')
 
         self.thread_send_line_notify = threading.Thread(
-            target=lineNotifyMessage, args=([token, msg]))
+            target=lineNotifyMessage, args=(token, msg))
         self.thread_send_line_notify.start()
+        return
 
     def parse_line_msg_back_to_queue_object(self, line_token, str):
         '''
