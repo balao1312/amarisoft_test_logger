@@ -15,22 +15,45 @@ import signal
 
 class Iperf3_logger(Amari_logger):
 
-    def __init__(self, port, parallel, notify, label, dont_send_to_db):
+    def __init__(self, port, parallel, notify, label, dont_send_to_db, project_field_name):
         super().__init__()
         self.port = port
         self.is_in_parallel_mode = parallel
         self.notify_when_terminated = notify
         self.label = label
+        self.project_field_name = project_field_name
         self.dont_send_to_db = dont_send_to_db
 
         # define RE patterns
         self.average_pattern = re.compile(r'.*(sender|receiver)')
-        self.sum_parallel_pattern = re.compile(
+        self.single_thread_mode_throughput_pattern = re.compile(
+            r'.*\ ([0-9.]*)\ Mbits\/sec')
+        self.multi_threads_mode_throughput_pattern = re.compile(
             r'^\[SUM\].*\ ([0-9.]*)\ Mbits\/sec')
         self.standby_pattern = re.compile(r'Server listening')
-
-        # iperf3: the client has terminated
+        # the stdout when client disconnected is "iperf3: the client has terminated"
+        # char after iperf3: is considered not as stdout so pexpect wont catch that. capture iperf3: is workaround.
         self.terminated_pattern = re.compile(r'iperf3:')
+
+        self.parse_args_to_string()
+        self.display_all_option()
+
+    def display_all_option(self):
+        print('==> Tool related args:')
+        print('-' * 120)
+        print(self.turn_to_form('send data to db',
+              str(bool(not self.dont_send_to_db))))
+        print(self.turn_to_form('data label in db', self.label))
+        print(self.turn_to_form('project field name', self.project_field_name))
+        print(self.turn_to_form('notify when terminated',
+              str(bool(self.notify_when_terminated))))
+        print(self.turn_to_form('parallel mode',
+              str(bool(self.is_in_parallel_mode))))
+        print('==> !!!!!!!!!!!!!!!!! check parallel mode arg or the result would be wrong!')
+        print(f'==> original cmd send: \n\n\t{self.cmd}\n')
+
+    def turn_to_form(self, a, b):
+        return f'| {a:<30}| {b:<85}|\n{"-" * 120}'
 
     def refresh_log_file(self):
         self.log_file = self.log_folder.joinpath(
@@ -38,22 +61,11 @@ class Iperf3_logger(Amari_logger):
         self.stdout_log_file = self.log_folder.joinpath(
             f'stdout_iperf3_server_{datetime.now().date()}.txt')
         self.stdout_log_object = open(self.stdout_log_file, 'a')
-
         self.stdout_log_object.write(
-            f'\n\n{"-"*80}\nNew session starts at: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n')
-
-        print(
-            f'==> iperf3 stdout will be logged to: {self.stdout_log_file}.txt')
+            f'\n\n{"-"*80}\nNew session starts at: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n{"-"*80}\n')
 
     def parse_args_to_string(self):
         self.cmd = f'iperf3 -s -p {self.port} -f m'
-
-        print(f'==> cmd send: \n\n\t{self.cmd}\n')
-        print(
-            f'==> parallel mode: {self.is_in_parallel_mode}, ******* check this arg or the result would be wrong!')
-        print(f'==> notify when terminated: {self.notify_when_terminated}')
-        print(f'==> influxdb label used: {self.label}')
-        self.stdout_log_object.write(f'iperf3 cmd: {self.cmd}\n{"-"*80}\n')
 
     def check_if_is_summary_and_show(self, line):
         if self.average_pattern.match(line):
@@ -72,77 +84,89 @@ class Iperf3_logger(Amari_logger):
             'fields': {'Mbps': mbps}
         }
 
+    def notify_when_client_termainated_on_demand(self, line):
+        if self.terminated_pattern.match(line) and self.notify_when_terminated:
+            msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n{self.label}\n{line.strip()}.'
+            thread_1 = threading.Thread(
+                target=self.send_line_notify, args=('balao', msg))
+            thread_1.start()
+
+    def send_to_db_on_demend(self, record_time, mbps):
+        if not self.dont_send_to_db:
+            data = self.gen_influx_format(record_time, mbps)
+            self.logging_with_buffer(data)
+        return
+
+    def check_if_is_disconnected(self, mbps):
+        if mbps == 0:
+            self.zero_counter += 1
+            if self.zero_counter >= 180:
+                print(
+                    '\n==> Can\'t get result from server for 3 mins, session stopped.(Disconnecion may be the reason)\n')
+                return True
+        else:
+            self.zero_counter = 0
+            return False
+
     def run_iperf3_session(self):
-        child = pexpect.spawnu(self.cmd, timeout=60,
+        '''
+        The idea is to show original iperf3 server stdout, so not showing counter every second.
+        '''
+
+        print('==> Start iperf3 session...\n')
+        self.refresh_log_file()
+        sleep(1)
+
+        child = pexpect.spawnu(self.cmd, timeout=10,
                                logfile=self.stdout_log_object)
-        zero_counter = 0
-        counter = 0
+
+        self.zero_counter = 0
         while True:
             try:
                 child.expect('\n')
-                line = child.before
-                print(line)
-                record_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-
-                # detect session end and clean buffer
-                if self.standby_pattern.match(line):
-                    self.clean_buffer_and_send()
-
-                # notify when terminated
-                if self.terminated_pattern.match(line) and self.notify_when_terminated:
-                    msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n{self.label}\n{line.strip()}.'
-                    thread_1 = threading.Thread(
-                        target=self.send_line_notify, args=('balao', msg))
-                    thread_1.start()
-
-                # check if in parallel mode
-                # must be a better way, TODO
-                if not self.is_in_parallel_mode:
-                    mbps = float(list(filter(None, line.split(' ')))[6])
-                    counter += 1
-                else:
-                    if not self.sum_parallel_pattern.search(line):
-                        continue
-                    else:
-                        mbps = float(
-                            self.sum_parallel_pattern.search(line).group(1))
-                        counter += 1
-                        # print(mbps)
-
-                if self.check_if_is_summary_and_show(line):
-                    continue
-
-                if not self.dont_send_to_db:
-                    data = self.gen_influx_format(record_time, mbps)
-                    self.logging_with_buffer(data)
-
-                if mbps == 0:
-                    zero_counter += 1
-                    if zero_counter == 180:
-                        print(
-                            '\n==> Can\'t get result from client for 3 mins, stopped.(Disconnecion may be the reason.)\n')
-                        break
-                else:
-                    zero_counter = 0
-
-            except pexpect.TIMEOUT as e:
-                # print('==> pexpect timeout.')
-                pass
+            except pexpect.exceptions.TIMEOUT as e:
+                # pexpect child process cannot set timeout to infinity, workaround.
+                continue
             except pexpect.exceptions.EOF as e:
                 print('==> got EOF, ended.')
-                # print(f'==> Error: {e}')
                 break
-            except (ValueError, IndexError):
-                # skip iperf stdout that DONT contain throughput lines
-                pass
+            line = child.before
+            print(line)
+            record_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+
+            # detect session end and clean buffer
+            if self.standby_pattern.match(line):
+                self.clean_buffer_and_send()
+
+            self.notify_when_client_termainated_on_demand(line)
+
+            # get throughput but check first if parallel number > 2
+            if not self.is_in_parallel_mode:
+                if not self.single_thread_mode_throughput_pattern.search(line):
+                    continue
+                mbps = float(
+                    self.single_thread_mode_throughput_pattern.search(line).group(1))
+            else:
+                if not self.multi_threads_mode_throughput_pattern.search(line):
+                    continue
+                else:
+                    mbps = float(
+                        self.multi_threads_mode_throughput_pattern.search(line).group(1))
+
+            if self.check_if_is_disconnected(mbps):
+                break
+
+            if self.check_if_is_summary_and_show(line):
+                continue
+
+            self.send_to_db_on_demend(record_time, mbps)
+
+        self.stdout_log_object.close()
         self.clean_buffer_and_send()
         child.kill(signal.SIGINT)
         return
 
     def run(self):
-        self.refresh_log_file()
-        self.parse_args_to_string()
-        # TODO show a table of args to let user confirm
         while True:
             self.run_iperf3_session()
             sleep(1)
@@ -158,6 +182,8 @@ if __name__ == '__main__':
                         help='notify when terminated')
     parser.add_argument('-l', '--label', metavar='', default='', type=str,
                         help='data label')
+    parser.add_argument('-F', '--project_field_name', metavar='', default="", type=str,
+                        help='Name of the project field')
     parser.add_argument('-U', '--dont_send_to_db', action="store_true",
                         help='disable sending record to db')
 
@@ -168,6 +194,7 @@ if __name__ == '__main__':
         parallel=args.parallel,
         notify=args.notify,
         label=args.label,
+        project_field_name=args.project_field_name,
         dont_send_to_db=args.dont_send_to_db
     )
 

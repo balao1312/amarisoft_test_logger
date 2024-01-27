@@ -92,7 +92,7 @@ class Amari_logger:
         with open(self.log_file, 'a') as f:
             for each in self.data_pool:
                 f.write(f'{json.dumps(each)}\n')
-        print(f'==> records saved to log file: {self.log_file}. ')
+        # print(f'==> records saved to log file: {self.log_file}. ')
 
     def send_to_influx(self, influx_format_list):
         try:

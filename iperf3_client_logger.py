@@ -1,6 +1,5 @@
 #!/usr/bin/python3
 
-from pathlib import Path
 import sys
 import os
 from time import sleep
@@ -214,7 +213,6 @@ class Iperf3_logger(Amari_logger):
         return
 
     def run(self):
-        # TODO fix cmd send confirm msg show everytime when restart session
         if input('Please confirm info above and press enter to continue.\n') != '':
             return
         self.run_iperf3_session()
