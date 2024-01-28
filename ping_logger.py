@@ -122,9 +122,7 @@ class Ping_logger(Amari_logger):
             msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n'\
                 f'got a RTT value from {self.ip} higher than {self.notify_cap} ms.\n'\
                 f'value: {latency} ms.\nSeq: {seq_counter}'
-            # TODO dst
-            notify = self.gen_notify_format(msg)
-            self.unsend_line_notify_queue.put(notify)
+            self.validate_to_send_notify(msg)
 
     def show_every_sec_result(self, counter, latency):
         msg = f'{counter}: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, '\
@@ -182,17 +180,16 @@ rtt min/avg/max/mdev = {summary_min}/{summary_avg:.3f}/{summary_max}/{statistics
                 f'\n==> ICMP packets are not returned. Target IP: {self.ip} cannot be reached. ')
 
             # Send line notify
-            delta = timedelta(seconds=-5)
-            msg = f'[BAD] {(datetime.now()+delta).strftime("%Y-%m-%d %H:%M:%S")}\ntarget IP {self.ip} cannot be reached.'
-            self.send_line_notify_on_demand(msg)
+            if self.notify_when_disconnected:
+                delta = timedelta(seconds=-5)
+                msg = f'[BAD] {(datetime.now()+delta).strftime("%Y-%m-%d %H:%M:%S")}\ntarget IP {self.ip} cannot be reached.'
+                self.validate_to_send_notify(msg)
 
             # if stay disconnected, will notify again after 1hr
             self.ping_no_return_count = -3596
 
-    def send_line_notify_on_demand(self, msg):
-        if not self.can_send_line_notify:
-            return
-        if self.notify_when_disconnected:
+    def validate_to_send_notify(self, msg):
+        if self.can_send_line_notify:
             self.unsend_line_notify_queue.put(self.gen_notify_format(msg))
         return
 
@@ -236,9 +233,9 @@ rtt min/avg/max/mdev = {summary_min}/{summary_avg:.3f}/{summary_max}/{statistics
             self.ping_no_return_count = 0
 
             # notify for the come back of connection and toggle is_disconnected
-            if self.is_disconnected:
+            if self.is_disconnected and self.notify_when_disconnected:
                 msg = f'[GOOD] {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n{self.ip} can be reached again. :)'
-                self.send_line_notify_on_demand(msg)
+                self.validate_to_send_notify(msg)
                 self.is_disconnected = False
 
         self.stdout_log_object.close()
