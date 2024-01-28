@@ -142,12 +142,12 @@ class Ping_logger(Amari_logger):
 
         # avoid error when ctrlc at beginning confirm stage
         try:
-            self.counter
+            self.seq_counter
         except:
             return
 
-        lost_rate = ((self.counter - len(self.all_latency_values)
-                      ) / self.counter) * 100
+        lost_rate = ((self.seq_counter - len(self.all_latency_values)
+                      ) / self.seq_counter) * 100
         summary_min = min(self.all_latency_values)
         summary_max = max(self.all_latency_values)
         summary_avg = sum(self.all_latency_values) / \
@@ -155,7 +155,7 @@ class Ping_logger(Amari_logger):
 
         summary_string = f'''
 --- {self.ip} ping statistics ---
-{self.counter} packets transmitted, {len(self.all_latency_values)} received, {lost_rate:.4f}% packet loss
+{self.seq_counter} packets transmitted, {len(self.all_latency_values)} received, {lost_rate:.4f}% packet loss
 rtt min/avg/max/mdev = {summary_min}/{summary_avg:.3f}/{summary_max}/{statistics.pstdev(self.all_latency_values):.3f} ms
 '''
         print(summary_string)
