@@ -174,7 +174,7 @@ class Iperf3_logger(Amari_logger):
         return
 
     def validate_to_send_notify(self, msg):
-        if self.can_send_line_notify and self.is_notify_when_disconnect:
+        if self.can_send_line_notify:
             self.unsend_line_notify_queue.put(self.gen_notify_format(msg))
 
     def send_to_db_on_demend(self, record_time, mbps):
@@ -186,10 +186,11 @@ class Iperf3_logger(Amari_logger):
     def check_if_is_disconnected(self, mbps):
         if mbps == 0:
             self.zero_counter += 1
-            if self.zero_counter >= 180:
+            if self.zero_counter >= 10:
                 print('\n==> Can\'t get result from server for 3 mins, session stopped.(Disconnecion may be the reason)\n')
                 notify_msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\niperf3 client is unable to reach iperf3 server.'
-                self.validate_to_send_notify(notify_msg)
+                if self.is_notify_when_disconnect:
+                    self.validate_to_send_notify(notify_msg)
                 return True
         else:
             self.zero_counter = 0
