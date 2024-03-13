@@ -241,6 +241,7 @@ rtt min/avg/max/mdev = {summary_min}/{summary_avg:.3f}/{summary_max}/{statistics
         self.stdout_log_object.close()
         self.clean_buffer_and_send()
         self.child.close()
+        self.unsend_line_notify_queue.put('app_end_running')
         return
 
 

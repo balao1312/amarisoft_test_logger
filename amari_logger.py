@@ -160,14 +160,22 @@ class Amari_logger:
                 sleep(5)
                 continue
             try:
+                # timeout = 3 will also set an idle interval
                 notify = self.unsend_line_notify_queue.get(timeout=3)
+
+                # return when receive end signal from queue
+                if notify == "app_end_running":
+                    break
+
                 self.unsend_line_notify_queue.task_done()
                 msg_string = f'\n[{notify["project_field_name"]}]\n{notify["msg"]}'
                 self.send_line_notify(notify['dst'], msg_string)
             except queue.Empty as e:
                 continue
 
-            sleep(5)
+            # an interval to sleep between msgs to be send
+            sleep(3)
+        return
 
     def write_to_file(self):
         with open(self.log_file, 'a') as f:

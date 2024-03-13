@@ -197,6 +197,7 @@ class Iperf3_logger(Amari_logger):
         self.stdout_log_object.close()
         self.clean_buffer_and_send()
         child.kill(signal.SIGINT)
+        self.unsend_line_notify_queue.put('app_end_running')
         return
 
     def run(self):
