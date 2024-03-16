@@ -15,6 +15,7 @@ from config import config
 class Amari_logger:
 
     is_send_to_db = True
+    number_of_instances = 0
 
     # check if python influx module installed
     try:
@@ -38,6 +39,7 @@ class Amari_logger:
         influxdb_dbname = ''
 
     def __init__(self):
+        self.number_of_instances += 1
         self.log_folder = Path.cwd().joinpath('logs')
         if not self.log_folder.exists():
             self.log_folder.mkdir()
@@ -51,11 +53,6 @@ class Amari_logger:
         self.can_send_line_notify = False
         self.unsend_line_notify_queue = queue.Queue()
         self.validate_notify_token()
-
-        # start notify check on background after child process is established
-        self.thread_check_unsend_line_notify = threading.Thread(
-            target=self.check_unsend_line_notify_and_try_send, args=([]))
-        self.thread_check_unsend_line_notify.start()
 
     def validate_notify_token(self):
         try:
@@ -159,18 +156,16 @@ class Amari_logger:
             if not self.is_with_internet:
                 sleep(5)
                 continue
+
             try:
-                # timeout = 3 will also set an idle interval
                 notify = self.unsend_line_notify_queue.get(timeout=3)
-
-                # return when receive end signal from queue
-                if notify == "app_end_running":
-                    break
-
                 self.unsend_line_notify_queue.task_done()
                 msg_string = f'\n[{notify["project_field_name"]}]\n{notify["msg"]}'
                 self.send_line_notify(notify['dst'], msg_string)
             except queue.Empty as e:
+                # break when function process is end and the queue is empty
+                if self.number_of_instances == 0:
+                    break
                 continue
 
             # an interval to sleep between msgs to be send

@@ -12,6 +12,7 @@ import pexpect
 import subprocess
 import shlex
 import signal
+import threading
 
 
 class Iperf3_logger(Amari_logger):
@@ -46,6 +47,12 @@ class Iperf3_logger(Amari_logger):
         self.parse_args_to_string()
         self.display_all_option()
         self.validate_notify_dst()
+
+        # start notify check on background after child process is established if notify function is on
+        if self.is_notify_when_disconnect:
+            self.thread_check_unsend_line_notify = threading.Thread(
+                target=self.check_unsend_line_notify_and_try_send, args=([]))
+            self.thread_check_unsend_line_notify.start()
 
     def display_all_option(self):
         print('\n==> Tool related args:')
@@ -242,7 +249,7 @@ class Iperf3_logger(Amari_logger):
         self.stdout_log_object.close()
         self.clean_buffer_and_send()
         child.kill(signal.SIGINT)
-        self.unsend_line_notify_queue.put('app_end_running')
+        self.number_of_instances -= 1
         return
 
     def run(self):

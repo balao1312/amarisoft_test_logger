@@ -11,6 +11,7 @@ from amari_logger import Amari_logger
 import argparse
 import pexpect
 import statistics
+import threading
 
 
 class Ping_logger(Amari_logger):
@@ -32,6 +33,12 @@ class Ping_logger(Amari_logger):
 
         self.display_all_option()
         self.validate_notify_dst()
+
+        # start notify check on background after child process is established if notify function is on
+        if self.notify_when_disconnected or self.notify_cap > 0:
+            self.thread_check_unsend_line_notify = threading.Thread(
+                target=self.check_unsend_line_notify_and_try_send, args=([]))
+            self.thread_check_unsend_line_notify.start()
 
     def turn_to_form(self, a, b):
         return f'| {a:<30}| {b:<85}|\n{"-" * 120}'
@@ -241,7 +248,7 @@ rtt min/avg/max/mdev = {summary_min}/{summary_avg:.3f}/{summary_max}/{statistics
         self.stdout_log_object.close()
         self.clean_buffer_and_send()
         self.child.close()
-        self.unsend_line_notify_queue.put('app_end_running')
+        self.number_of_instances -= 1
         return
 
 
