@@ -57,13 +57,13 @@ class Amari_logger:
     def validate_notify_token(self):
         try:
             self.line_notify_dsts = self.db_config['line_notify_token']
-            if len(self.line_notify_dsts) > 0:
-                self.can_send_line_notify = True
-            else:
-                print(
-                    '\n==> Line notify token is not found, notify function is disabled.')
-                time.sleep(2)
-        except (NameError, ImportError, KeyError) as e:
+        except AttributeError:
+            print('\n==> Line notify token is not found, notify function is disabled.')
+            return
+
+        if len(self.line_notify_dsts) > 0:
+            self.can_send_line_notify = True
+        else:
             print(
                 '\n==> Line notify token is not found, notify function is disabled.')
             time.sleep(2)
