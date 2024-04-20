@@ -12,6 +12,7 @@ import argparse
 import pexpect
 import statistics
 import threading
+import logging
 
 
 class Ping_logger(Amari_logger):
@@ -40,6 +41,24 @@ class Ping_logger(Amari_logger):
                 target=self.check_unsend_line_notify_and_try_send, args=([]))
             self.thread_check_unsend_line_notify.start()
 
+        # TODO log to different file when day change
+        self.syslogging_file_renew()
+
+    def syslogging_file_renew(self):
+        logger = logging.getLogger()
+        for each in logger.handlers[:]:
+            logger.removeHandler(each)
+
+        # set urllibs logging level to warning, otherwise my syslog will be full of http connections msgs.
+        logging.getLogger("urllib3").setLevel(logging.WARNING)
+
+        self.sys_logging_file = self.sys_log_folder.joinpath(
+            f'syslog_{datetime.now().strftime("%Y-%m-%d")}.log')
+        logging_format = '[%(asctime)s] %(levelname)s: %(message)s'
+        logging_datefmt = '%Y-%m-%d %H:%M:%S'
+        logging.basicConfig(level=logging.DEBUG, format=logging_format, datefmt=logging_datefmt,
+                            handlers=[logging.FileHandler(self.sys_logging_file)])
+
     def turn_to_form(self, a, b):
         return f'| {a:<30}| {b:<85}|\n{"-" * 120}'
 
@@ -57,14 +76,16 @@ class Ping_logger(Amari_logger):
         print(self.turn_to_form('project field name', self.project_field_name))
         print(self.turn_to_form('notify destination', self.notify_dst))
 
-    def validate_notify_dst(self): 
+    def validate_notify_dst(self):
         if self.can_send_line_notify:
             if not self.notify_dst:
-                print(f'==> Waring: Notify destination is not set, notify function is disabled.')
+                print(
+                    f'==> Waring: Notify destination is not set, notify function is disabled.')
                 self.can_send_line_notify = False
                 return
             if not self.notify_dst in self.line_notify_dsts:
-                print(f'\n==> Notify destination "{self.notify_dst}" is not valid, notify function is disabled.\n')
+                print(
+                    f'\n==> Notify destination "{self.notify_dst}" is not valid, notify function is disabled.\n')
                 self.can_send_line_notify = False
                 return
 
@@ -129,6 +150,8 @@ class Ping_logger(Amari_logger):
             msg = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n'\
                 f'got a RTT value from {self.ip} higher than {self.notify_cap} ms.\n'\
                 f'value: {latency} ms.\nSeq: {seq_counter}'
+            syslog_msg = f'got a RTT value from {self.ip} higher than {self.notify_cap} ms. value: {latency} ms. Seq: {seq_counter}'
+            logging.warning(f"[{__class__.__name__}] {syslog_msg}")
             self.validate_to_send_notify(msg)
 
     def show_every_sec_result(self, counter, latency):
@@ -184,7 +207,9 @@ rtt min/avg/max/mdev = {summary_min}/{summary_avg:.3f}/{summary_max}/{statistics
         if self.ping_no_return_count >= 5:
             self.is_disconnected = True
             print(
-                f'\n==> ICMP packets are not returned. Target IP: {self.ip} cannot be reached. ')
+                f'\n==> ICMP packets are not returned. Target IP: {self.ip} cannot be reached.')
+            syslog_msg = f'ICMP packets are not returned. Target IP: {self.ip} cannot be reached.'
+            logging.warning(f"[{__class__.__name__}] {syslog_msg}")
 
             # Send line notify
             if self.notify_when_disconnected:
@@ -198,6 +223,8 @@ rtt min/avg/max/mdev = {summary_min}/{summary_avg:.3f}/{summary_max}/{statistics
     def validate_to_send_notify(self, msg):
         if self.can_send_line_notify:
             self.unsend_line_notify_queue.put(self.gen_notify_format(msg))
+            logging.info(
+                f'[{__class__.__name__}] put a line notification to unsend_notification_queue.')
         return
 
     def run(self):
@@ -206,6 +233,7 @@ rtt min/avg/max/mdev = {summary_min}/{summary_avg:.3f}/{summary_max}/{statistics
         if input('Please confirm info above and press enter to continue.\n') != '':
             return
 
+        logging.info(f'[{__class__.__name__}] start a ping session.')
         self.child = pexpect.spawnu(self.cmd, timeout=10,
                                     logfile=self.stdout_log_object)
 
@@ -277,7 +305,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    logger = Ping_logger(
+    ping_logger = Ping_logger(
         args.host,
         args.tos,
         args.exec_secs,
@@ -291,20 +319,20 @@ if __name__ == '__main__':
     )
 
     try:
-        logger.run()
+        ping_logger.run()
     except KeyboardInterrupt:
-        with open(logger.stdout_log_file, 'a') as f:
+        with open(ping_logger.stdout_log_file, 'a') as f:
             f.write('==> Got Ctrl+C.\n')
-        logger.write_summary_to_stdout_file()
-        logger.stdout_log_object.close()
-        logger.clean_buffer_and_send()
-        print('\n==> Interrupted.\n')
+        ping_logger.write_summary_to_stdout_file()
+        ping_logger.stdout_log_object.close()
+        ping_logger.clean_buffer_and_send()
+        print('\n==> Got Ctrl+C.\n')
         sleep(0.1)
 
         # try send data in buffer before close, timeout can be set in config.py
-        max_sec_count = logger.db_retries * logger.db_timeout
+        max_sec_count = ping_logger.db_retries * ping_logger.db_timeout
         countdown = copy(max_sec_count)
-        while logger.is_in_sending_to_db_session:
+        while ping_logger.is_in_sending_to_db_session:
             if countdown < max_sec_count:
                 print(
                     f'==> waiting for process to end ... secs left max {countdown}')

@@ -8,6 +8,7 @@ import subprocess
 import shlex
 from time import sleep
 import queue
+import logging
 
 from config import config
 
@@ -43,6 +44,9 @@ class Amari_logger:
         self.log_folder = Path.cwd().joinpath('logs')
         if not self.log_folder.exists():
             self.log_folder.mkdir()
+        self.sys_log_folder = Path.cwd().joinpath('syslogs')
+        if not self.sys_log_folder.exists():
+            self.sys_log_folder.mkdir()
 
         self.send_fail_file = self.log_folder.joinpath('send_fail')
         self.db_timeout = config['db_connect_timeout']
@@ -52,9 +56,9 @@ class Amari_logger:
         self.is_in_sending_to_db_session = False
         self.can_send_line_notify = False
         self.unsend_line_notify_queue = queue.Queue()
-        self.validate_notify_token()
+        self.validate_line_notify_token()
 
-    def validate_notify_token(self):
+    def validate_line_notify_token(self):
         try:
             self.line_notify_dsts = self.db_config['line_notify_token']
         except AttributeError:
@@ -103,21 +107,26 @@ class Amari_logger:
                 r = requests.post("https://notify-api.line.me/api/notify",
                                   headers=line_headers, params=payload)
                 if r.status_code == 200:
-                    print('==> Line notify sent.')
+                    print('==> Line notification sent.')
+                    logging.info(
+                        f'[{__class__.__name__}] successfully sent a line notification.')
                     return
                 else:
                     retry_counter += 1
-                    print(f'==> Send notify failed. attempt = {retry_counter}')
+                    print(
+                        f'==> Send notification failed. attempt = {retry_counter}')
                     sleep(1)
-            # if still send fail then put back to queue
+            # if send still fail, then put back to queue
             self.unsend_line_notify_queue.put(
                 self.parse_line_msg_back_to_queue_object(line_token, msg))
+            logging.info(
+                f'[{__class__.__name__}] send line notification fail, put back to unsend_notification_queue.')
 
         if not self.can_send_line_notify:
             return
 
         token = self.line_notify_dsts[dst]
-        print('==> Trying send line notify...')
+        print('==> Trying to send line notification...')
 
         self.thread_send_line_notify = threading.Thread(
             target=lineNotifyMessage, args=(token, msg))
@@ -131,8 +140,8 @@ class Amari_logger:
         but the notify info has been concatenate to one long string.
         This function will parse it back to notify format designed.
         '''
-        dst = list(self.line_notify_token.keys())[
-            list(self.line_notify_token.values()).index(line_token)]
+        dst = list(self.line_notify_dsts.keys())[
+            list(self.line_notify_dsts.values()).index(line_token)]
         project_field_name = str.split('\n')[1][1:-1]
         msg = '\n'.join(str.split('\n')[2:])
         return {
@@ -160,6 +169,8 @@ class Amari_logger:
             try:
                 notify = self.unsend_line_notify_queue.get(timeout=3)
                 self.unsend_line_notify_queue.task_done()
+                logging.info(
+                    f'[{__class__.__name__}] got a line notification from unsend_notification_queue.')
                 msg_string = f'\n[{notify["project_field_name"]}]\n{notify["msg"]}'
                 self.send_line_notify(notify['dst'], msg_string)
             except queue.Empty as e:

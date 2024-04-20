@@ -4,3 +4,4 @@ __pycache__
 .vscode/*
 credential.py
 logs
+syslogs
