@@ -41,24 +41,6 @@ class Ping_logger(Amari_logger):
                 target=self.check_unsend_line_notify_and_try_send, args=([]))
             self.thread_check_unsend_line_notify.start()
 
-        # TODO log to different file when day change
-        self.syslogging_file_renew()
-
-    def syslogging_file_renew(self):
-        logger = logging.getLogger()
-        for each in logger.handlers[:]:
-            logger.removeHandler(each)
-
-        # set urllibs logging level to warning, otherwise my syslog will be full of http connections msgs.
-        logging.getLogger("urllib3").setLevel(logging.WARNING)
-
-        self.sys_logging_file = self.sys_log_folder.joinpath(
-            f'syslog_{datetime.now().strftime("%Y-%m-%d")}.log')
-        logging_format = '[%(asctime)s] %(levelname)s: %(message)s'
-        logging_datefmt = '%Y-%m-%d %H:%M:%S'
-        logging.basicConfig(level=logging.DEBUG, format=logging_format, datefmt=logging_datefmt,
-                            handlers=[logging.FileHandler(self.sys_logging_file)])
-
     def turn_to_form(self, a, b):
         return f'| {a:<30}| {b:<85}|\n{"-" * 120}'
 
@@ -233,7 +215,7 @@ rtt min/avg/max/mdev = {summary_min}/{summary_avg:.3f}/{summary_max}/{statistics
         if input('Please confirm info above and press enter to continue.\n') != '':
             return
 
-        logging.info(f'[{__class__.__name__}] start a ping session.')
+        logging.info(f'[{__class__.__name__}] start a ping session. Target IP: {self.ip}')
         self.child = pexpect.spawnu(self.cmd, timeout=10,
                                     logfile=self.stdout_log_object)
 

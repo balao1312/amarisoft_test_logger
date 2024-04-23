@@ -8,6 +8,7 @@ import subprocess
 import shlex
 from time import sleep
 import queue
+import datetime
 import logging
 
 from config import config
@@ -57,6 +58,24 @@ class Amari_logger:
         self.can_send_line_notify = False
         self.unsend_line_notify_queue = queue.Queue()
         self.validate_line_notify_token()
+
+        # TODO log to different file when day change
+        self.syslogging_file_renew()
+
+    def syslogging_file_renew(self):
+        logger = logging.getLogger()
+        for each in logger.handlers[:]:
+            logger.removeHandler(each)
+
+        # set urllibs logging level to warning, otherwise my syslog will be full of http connections msgs.
+        logging.getLogger("urllib3").setLevel(logging.WARNING)
+
+        self.sys_logging_file = self.sys_log_folder.joinpath(
+            f'syslog_{datetime.datetime.now().strftime("%Y-%m-%d")}.log')
+        logging_format = '[%(asctime)s] %(levelname)s: %(message)s'
+        logging_datefmt = '%Y-%m-%d %H:%M:%S'
+        logging.basicConfig(level=logging.DEBUG, format=logging_format, datefmt=logging_datefmt,
+                            handlers=[logging.FileHandler(self.sys_logging_file)])
 
     def validate_line_notify_token(self):
         try:
@@ -136,9 +155,9 @@ class Amari_logger:
     def parse_line_msg_back_to_queue_object(self, line_token, str):
         '''
         Just for my obsessive-compulsive disorder.
-        When line notify keep sending fail, notify need to be put back to unsend line notify queue,
-        but the notify info has been concatenate to one long string.
-        This function will parse it back to notify format designed.
+        When notifications keep failed to be send, notifications need to be put back to unsend queue.
+        But the notification info has been concatenate to one long string, which is not the same format from when it is in queue.
+        This function will parse it back to notification format designed.
         '''
         dst = list(self.line_notify_dsts.keys())[
             list(self.line_notify_dsts.values()).index(line_token)]
@@ -152,8 +171,8 @@ class Amari_logger:
 
     def check_unsend_line_notify_and_try_send(self):
         '''
-        All notify msg will be add to self.unsend_line_notify_queue.
-        This func will check if there is any and try to send.
+        All notifications will be add to self.unsend_line_notify_queue.
+        This func will check if there is any unsend notifications and try to send them.
 
         line notify data format: {
             'project_field_name':
